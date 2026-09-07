@@ -26,8 +26,10 @@ constrained only by what a given copy of the page can actually do.
 
 The mode is a stored preference — `froogle.mode` in `localStorage`, `"proxied"` or `"direct"`,
 defaulting to `"proxied"` — kept **separately from the key**, so switching modes never destroys a
-saved key and switching back needs no re-entry. Both wordings below are the ones the About page
-uses; Settings echoes them rather than inventing a second explanation.
+saved key and switching back needs no re-entry. It changes only when Settings is saved: the radio
+is pending form state until then, and Save commits the mode and the key together or neither. Both
+wordings below are the ones the About page uses; Settings echoes them rather than inventing a
+second explanation.
 
 ### Proxied mode (the default)
 
@@ -56,12 +58,11 @@ than silently doing something else, and the stored preference is left untouched:
 
 | Chosen | Situation | What happens |
 |---|---|---|
-| Direct | No key saved | The search fails with "Direct mode needs a Keenable API key", linking to Settings. The radio stays on Direct |
+| Direct | No key saved | Settings will not save this combination in the first place. It survives only from outside — storage cleared, or a key removed by the browser — and then the search fails with "Direct mode needs a Keenable API key", linking to Settings. The radio stays on Direct |
 | Proxied | `file://`, or `PROXY_PATH` empty | Impossible — there is no server. The Proxied radio is shown disabled with a one-line reason, and searches use Direct |
 | Proxied | The proxy answers 404/405, or unparseably | The search says this copy has no proxy, and either points at Direct plus a key or, when a key is already saved, notes the next search will go direct. The preference survives, so a later deploy that does have a proxy is honoured with no re-choosing |
 
-Mode is computed per search, so saving a key or switching mode takes effect immediately with no
-reload.
+Mode is computed per search, so saving Settings takes effect immediately with no reload.
 
 ## Deployment shapes
 
@@ -185,18 +186,29 @@ Static prose in the same page. Content:
 
 ### Settings
 
-Two radios, **Proxied** (default) and **Direct**, each with the About page's wording beneath it,
-then one line reporting what searches will actually do — which is the only place that can say the
-chosen mode is not the one running. Where Proxied cannot be honoured, a note under it gives the
-one-line reason; the radio is disabled only where a proxy is structurally impossible, never merely
-because a request found none.
+One form, saved by one button. Two radios, **Proxied** (default) and **Direct**, each with the
+About page's wording beneath it and a link to Keenable for a free key in the Direct one. The key
+field is indented inside the Direct choice — it is that choice's requirement, not a section of its
+own — and is write-only: it shows nothing back and is blank whenever a key is already saved. Where
+Proxied cannot be honoured, a note under it gives the one-line reason; the radio is disabled only
+where a proxy is structurally impossible, never merely because a request found none.
 
-Below that, the key form: a text input, a Save, and a Clear, with a link to Keenable for a free
-key. The key is stored apart from the mode, so switching modes never throws it away, and its state
-line reports only what key this browser holds.
+Below the form, two lines: what searches will actually do — the only place that can say the chosen
+mode is not the one running — and what key this browser holds, which says nothing about the mode.
 
-Saving validates the key with a real search request before storing it, and reports failure rather
-than silently saving a bad key.
+Nothing in the form takes effect until Save. The radio is a pending choice, and so is Clear, which
+sits beside the key field's label whenever a key is saved and stages its removal rather than
+performing it. Save then commits the mode and the key as one action:
+
+* A typed key is validated with a real search request first. A rejected key saves nothing at all,
+  the mode included, rather than silently storing a bad key.
+* Direct with no key anywhere — none typed, none staying saved, none built into the file — is
+  refused on the key field, and nothing is written. This is what keeps a mode that cannot search
+  from being stored. The visitor is told to add a key, or to choose Proxied where Proxied is
+  actually usable — never on a copy whose own note says it is not.
+* Direct with the field left blank over a key that is already saved is valid: blank is the
+  write-only field's resting state.
+* Proxied requires no key and discards none.
 
 ## Search behavior
 

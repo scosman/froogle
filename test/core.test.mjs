@@ -28,7 +28,7 @@ const EXPORTED = [
   "resultsFrom", "resultTitle", "pickSnippet", "normalizeSnippet", "isLinkableUrl", "displayUrl",
   "formatDate",
   "escapeXml", "errorMessage", "keyCheckResult",
-  "modeLabel", "proxyNote", "modeStateText", "keyStateText", "formatElapsed",
+  "modeLabel", "proxyNote", "modeStateText", "keyStateText", "settingsError", "formatElapsed",
   "resolveEngineName", "DEFAULT_ENGINE_NAME", "DEFAULT_MODE",
 ];
 
@@ -792,15 +792,47 @@ test("modeStateText treats an unreadable stored preference as the default", () =
 test("keyStateText reports the key this browser holds, and nothing about the mode", () => {
   // The mode line above it owns the mode; two lines describing it could drift apart.
   assert.equal(core.keyStateText({ builtIn: false, saved: true }), "A key is saved in this browser.");
-  assert.equal(core.keyStateText({ builtIn: false, saved: false }),
-    "No key is saved in this browser.");
+  // Nothing at all for an empty browser: the write-only key field above is blank, which says it.
+  assert.equal(core.keyStateText({ builtIn: false, saved: false }), "");
+  assert.equal(core.keyStateText(), "");
   assert.match(core.keyStateText({ builtIn: true, saved: true }), /has a key built in/);
   assert.match(core.keyStateText({ builtIn: true, saved: false, engineName: RENAMED }),
     new RegExp("copy of " + RENAMED));
-  assert.match(core.keyStateText(), /No key is saved/);
   for (const line of [core.keyStateText({ saved: true }), core.keyStateText({ builtIn: true })]) {
     assert.doesNotMatch(line, /proxied|direct|mode/i);
   }
+});
+
+test("settingsError refuses only the mode that could not search once saved", () => {
+  // Direct with no key anywhere is the one combination Save cannot commit: storing it would
+  // produce the saved "Mode: no key" state the form exists to make unreachable.
+  assert.match(core.settingsError({ mode: "direct", typedKey: "", keptKey: "" }),
+    /needs a Keenable API key/);
+  assert.match(core.settingsError({ mode: "direct", typedKey: "   ", keptKey: "  " }),
+    /needs a Keenable API key/);
+  // A key typed now, or one already saved and not being cleared, or one built into the file.
+  assert.equal(core.settingsError({ mode: "direct", typedKey: "keen_new", keptKey: "" }), null);
+  assert.equal(core.settingsError({ mode: "direct", typedKey: "", keptKey: "keen_saved" }), null);
+  // Proxied never needs a key, and never discards one that is saved.
+  assert.equal(core.settingsError({ mode: "proxied", typedKey: "", keptKey: "" }), null);
+  assert.equal(core.settingsError({ mode: "proxied", typedKey: "", keptKey: "keen_saved" }), null);
+  // An unreadable stored preference is the default, which is Proxied, so it commits.
+  assert.equal(core.settingsError({ mode: "nonsense", typedKey: "", keptKey: "" }), null);
+  assert.equal(core.settingsError(), null);
+});
+
+test("settingsError offers Proxied as the way out only where Proxied works", () => {
+  // Otherwise the refusal would tell a file:// visitor to choose the mode the note two lines above
+  // has just said is unavailable here. One source of advice, as everywhere else in Settings.
+  const usable = core.settingsError({ mode: "direct", proxyUsable: true });
+  assert.match(usable, /Keenable API key/);
+  assert.match(usable, /choose Proxied/);
+  for (const blocked of [false, undefined]) {
+    const message = core.settingsError({ mode: "direct", proxyUsable: blocked });
+    assert.match(message, /Keenable API key/);
+    assert.doesNotMatch(message, /Proxied/);
+  }
+  assert.doesNotMatch(usable, /\b[45]\d\d\b/);
 });
 
 test("formatElapsed reports a real measurement to two decimals, or nothing at all", () => {

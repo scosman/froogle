@@ -248,9 +248,17 @@ a:visited { color: var(--link-visited); }
 .prose p.choice__note { margin: 6px 0 0 25px; font-size: 13px; line-height: 1.6; color: var(--alert); }
 .choice-group + .choice-group { margin-top: 22px; }
 
-.key-form { margin: 0; max-width: 420px; }
-.key-form label { display: block; margin-bottom: 8px; font-size: 13px; color: var(--ink-muted); }
+/* The key field lives inside the Direct choice, indented to the same 25px as the choice bodies so
+   it reads as part of that choice rather than as a section of its own. */
+.key-field { margin: 14px 0 0 25px; max-width: 420px; }
+.key-field__head { display: flex; align-items: baseline; gap: 14px; }
+.key-field__head label { font-size: 13px; color: var(--ink-muted); }
+.key-field--error .key-field__head label { color: var(--alert); }
+.prose p.key-field__note { margin: 8px 0 0; font-size: 13px; line-height: 1.6; color: var(--ink-muted); }
+.prose p.key-field__note--error { color: var(--alert); }
+
 .key-input {
+  margin-top: 8px;
   width: 100%;
   border: 0;
   border-bottom: 1px solid var(--ink);
@@ -268,6 +276,18 @@ a:visited { color: var(--link-visited); }
   border-bottom-color: var(--link);
   box-shadow: 0 1px 0 0 var(--link);
 }
+/* A refused save reddens the field: its label, its doubled rule, and the note beneath it. The
+   :focus selectors are repeated because the plain focus rules are the more specific ones and
+   would otherwise take the red away at the exact moment the save moves focus here — and because
+   the rule cannot be red and blue at once, focus goes back to a real outline for the duration
+   rather than to the blue rule that stands in for one everywhere else. Color carries none of this
+   alone: the note says it in words, and forced colors drops all of it. */
+.key-input--error,
+.key-input--error:focus {
+  border-bottom-color: var(--alert);
+  box-shadow: 0 1px 0 0 var(--alert);
+}
+.key-input--error:focus { outline: 2px solid var(--link); outline-offset: 2px; }
 /* forced-colors drops box-shadow entirely and overrides border-color with a system color, so the
    replacement focus indicator above would leave a keyboard user with nothing on either field. */
 @media (forced-colors: active) {
@@ -275,21 +295,25 @@ a:visited { color: var(--link-visited); }
   .key-input:focus { outline: 2px solid Highlight; outline-offset: 2px; }
 }
 
-.key-buttons { display: flex; gap: 10px; margin-top: 18px; }
-.button-secondary {
-  border: 1px solid var(--ink);
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
+.form-actions { margin-top: 22px; }
+
+/* A button, because it acts rather than navigates, wearing the link's clothes: it is a quiet
+   secondary action beside a label, not a peer of Save. */
+.link-button {
+  border: 0;
+  background: none;
+  padding: 0;
   font: inherit;
   font-size: 12px;
-  padding: 8px 17px;
+  color: var(--link);
   cursor: pointer;
 }
-.button-secondary:hover { background: var(--rule); }
-.button-secondary[disabled] { color: var(--ink-muted); border-color: var(--ink-muted); cursor: default; }
+.link-button:hover { text-decoration: underline; }
+.link-button[disabled] { color: var(--ink-muted); cursor: default; text-decoration: none; }
 
 .prose p.state-line { margin: 16px 0 0; font-size: 13px; line-height: 1.6; color: var(--ink-muted); }
+/* The two state lines are one block of status, not two paragraphs. */
+.prose p.state-line + p.state-line { margin-top: 4px; }
 
 @media (max-width: 560px) {
   .masthead { padding: 16px 16px 12px; }
@@ -438,60 +462,60 @@ a:visited { color: var(--link-visited); }
     <h1>Settings</h1>
 
     <h2>Search mode</h2>
-    <fieldset class="fieldset" id="mode-choices">
-      <legend class="visually-hidden">Search mode</legend>
+    <!-- One form for the whole page: the radios and the key are pending until Save commits them
+         together, so a mode that cannot search can never be stored. -->
+    <form id="settings-form">
+      <fieldset class="fieldset" id="mode-choices">
+        <legend class="visually-hidden">Search mode</legend>
 
-      <div class="choice-group">
-        <label class="choice" for="mode-proxied">
-          <input type="radio" name="mode" value="proxied" id="mode-proxied"
-                 aria-describedby="proxy-note">
-          <span class="choice__name">Proxied</span>
-          <span class="choice__default">default</span>
-        </label>
-        <p class="choice__body">
-          Queries are proxied through <span data-engine-name>Froogle</span>'s servers to the
-          Keenable API. Nothing is logged or tracked by <span data-engine-name>Froogle</span>
-          servers. Keenable may still log and track, but we don't pass them any personal
-          identifier or your IP, so your traffic is mixed with other
-          <span data-engine-name>Froogle</span> users. This mode may hit rate limits. Zero setup.
-        </p>
-        <p class="choice__note" id="proxy-note" hidden></p>
-      </div>
+        <div class="choice-group">
+          <label class="choice" for="mode-proxied">
+            <input type="radio" name="mode" value="proxied" id="mode-proxied"
+                   aria-describedby="proxy-note">
+            <span class="choice__name">Proxied</span>
+            <span class="choice__default">default</span>
+          </label>
+          <p class="choice__body">
+            Queries are proxied through <span data-engine-name>Froogle</span>'s servers to the
+            Keenable API. Nothing is logged or tracked by <span data-engine-name>Froogle</span>
+            servers. Keenable may still log and track, but we don't pass them any personal
+            identifier or your IP, so your traffic is mixed with other
+            <span data-engine-name>Froogle</span> users. This mode may hit rate limits. Zero setup.
+          </p>
+          <p class="choice__note" id="proxy-note" hidden></p>
+        </div>
 
-      <div class="choice-group">
-        <label class="choice" for="mode-direct">
-          <input type="radio" name="mode" value="direct" id="mode-direct">
-          <span class="choice__name">Direct</span>
-        </label>
-        <p class="choice__body">
-          All requests go directly from your browser to Keenable, using the API key you save
-          below; <span data-engine-name>Froogle</span> never sees your queries. You'll need to
-          create an account with Keenable and set this mode up. Keenable will be able to identify
-          you via this unique API key.
-        </p>
-      </div>
-    </fieldset>
-    <p class="state-line" id="mode-state" role="status" aria-live="polite"></p>
+        <div class="choice-group">
+          <label class="choice" for="mode-direct">
+            <input type="radio" name="mode" value="direct" id="mode-direct">
+            <span class="choice__name">Direct</span>
+          </label>
+          <p class="choice__body">
+            All requests go directly from your browser to Keenable, using the API key below;
+            <span data-engine-name>Froogle</span> never sees your queries. You'll need to create a
+            free account with <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>
+            and set this mode up. Keenable will be able to identify you via this unique API key.
+          </p>
+          <div class="key-field" id="key-field">
+            <div class="key-field__head">
+              <label for="key-input">Keenable API key</label>
+              <button class="link-button" type="button" id="key-clear" hidden
+                      aria-label="Clear the saved Keenable API key">Clear</button>
+            </div>
+            <input class="key-input" id="key-input" type="password" autocomplete="off"
+                   autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="keen_…"
+                   aria-describedby="key-note">
+            <p class="key-field__note" id="key-note" hidden></p>
+          </div>
+        </div>
+      </fieldset>
 
-    <h2>Keenable API key</h2>
-    <p>
-      Direct mode needs a Keenable API key. Keys are free from
-      <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>. The key stays in this
-      browser and is sent only to Keenable — never to a
-      <span data-engine-name>Froogle</span> server. It is kept separately from the mode above, so
-      switching back to Proxied does not throw it away.
-    </p>
-
-    <form class="key-form" id="key-form">
-      <label for="key-input">Keenable API key</label>
-      <input class="key-input" id="key-input" type="password" autocomplete="off"
-             autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="keen_…">
-      <div class="key-buttons">
-        <button class="search__submit" type="submit" id="key-save">Save</button>
-        <button class="button-secondary" type="button" id="key-clear">Clear</button>
+      <div class="form-actions">
+        <button class="search__submit" type="submit" id="settings-save">Save</button>
       </div>
     </form>
 
+    <p class="state-line" id="mode-state" role="status" aria-live="polite"></p>
     <p class="state-line" id="key-state" role="status" aria-live="polite"></p>
   </div>
 </section>
@@ -955,15 +979,39 @@ function modeStateText({ preference, effective, engineName } = {}) {
   return "Direct mode needs a Keenable API key before it can search.";
 }
 
-/* The line under the key form: what key, if any, this browser will use. It deliberately says
+/* The line under the Settings form: what key, if any, this browser will use. It deliberately says
    nothing about the mode — the line under the radios above owns that — so the two cannot drift
-   into contradicting each other. */
+   into contradicting each other.
+
+   An empty browser says nothing at all, because the empty field above already does: the field is
+   write-only, so blank is exactly "no key here". */
 function keyStateText({ builtIn, saved, engineName } = {}) {
   if (builtIn) {
     return "This copy of " + resolveEngineName(engineName) + " has a key built in, which takes "
       + "precedence over anything saved here.";
   }
-  return saved ? "A key is saved in this browser." : "No key is saved in this browser.";
+  return saved ? "A key is saved in this browser." : "";
+}
+
+/* Why Save cannot commit the form as it stands, or null when it can.
+
+   One combination is refusable, and only on Save: Direct chosen with no key anywhere — none
+   typed, none staying saved once a staged Clear is applied, none built into the file. Committing
+   it would store a mode that cannot search, which is the "Mode: no key" state the form exists to
+   make unreachable. Everything else commits: Proxied never needs a key, and Direct with the field
+   left blank over an already-saved key is the field's ordinary resting state, not an error.
+
+   `proxyUsable` — proxyStatus() === "possible" — decides whether Proxied is offered as the way
+   out. Where it is not, this copy of the page has no searching mode that works without a key, and
+   saying "choose Proxied" would contradict the note that has just said Proxied is unavailable
+   here. Same rule as everywhere else in Settings: one source of advice. */
+function settingsError({ mode, typedKey, keptKey, proxyUsable } = {}) {
+  const chosen = normalizeMode(mode);
+  const haveKey = Boolean(String(typedKey ?? "").trim() || String(keptKey ?? "").trim());
+  if (chosen !== "direct" || haveKey) return null;
+  return proxyUsable
+    ? "Direct mode needs a Keenable API key. Add one, or choose Proxied."
+    : "Direct mode needs a Keenable API key. Add one to search.";
 }
 
 // ---- FROOGLE:CORE:END ----
@@ -1015,9 +1063,11 @@ const el = {
   modeDirect: document.getElementById("mode-direct"),
   proxyNote: document.getElementById("proxy-note"),
   modeState: document.getElementById("mode-state"),
-  keyForm: document.getElementById("key-form"),
+  settingsForm: document.getElementById("settings-form"),
+  keyField: document.getElementById("key-field"),
+  settingsSave: document.getElementById("settings-save"),
   keyInput: document.getElementById("key-input"),
-  keySave: document.getElementById("key-save"),
+  keyNote: document.getElementById("key-note"),
   keyClear: document.getElementById("key-clear"),
   keyState: document.getElementById("key-state"),
   favicon: document.getElementById("favicon"),
@@ -1060,6 +1110,16 @@ let previousView = null;
 let keyFeedback = "";
 let modeFeedback = "";
 let keyChecking = false;
+
+/* Settings is a form, and these three are its pending state: the radio selection, a Clear that has
+   been asked for but not yet applied, and the reason the last Save refused. None of them is read
+   by anything outside the form — the mode line in the utility row, the state line under the
+   radios and the search path all read the *saved* preference through modePreference(), so the
+   masthead cannot start reporting a mode that has not been committed. Save is the only thing that
+   turns any of this into storage. */
+let pendingMode = DEFAULT_MODE;
+let pendingClear = false;
+let keyError = "";
 /* Bumped by each save attempt and by every navigation, so a slow validation cannot surface its
    message after the visitor has moved on. The key itself is still stored — that part was asked
    for; only the feedback is stale. */
@@ -1115,6 +1175,14 @@ function currentMode(key = currentKey()) {
 
 function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
+}
+
+/* Text into one of the two `role="status"` lines. Assigning the same string still replaces the
+   text node, which a screen reader may take as new and read again — and render() runs on every
+   radio move and on some keystrokes, so the lines would be re-announced while the visitor is
+   simply looking around the form. */
+function setStatus(node, text) {
+  if (node.textContent !== text) node.textContent = text;
 }
 
 function settingsLink(text) {
@@ -1236,40 +1304,59 @@ function renderTiming() {
   el.timing.textContent = measured || "";
 }
 
-/* The chosen mode, whether it can be honoured here, and what searches therefore do. Proxied is
+/* The radios show the *pending* selection; everything below them shows what is saved. Proxied is
    disabled only where it is structurally impossible — a file:// copy, or a PROXY_PATH switched
    off — and never merely because a probe found nothing: that copy may be redeployed with a proxy
    behind it, and the stored preference has to survive to be honoured when it is. */
 function renderModeChoice() {
-  const preference = modePreference();
   const status = currentProxyStatus();
-  el.modeProxied.checked = preference === "proxied";
-  el.modeDirect.checked = preference === "direct";
-  el.modeProxied.disabled = status === "blocked";
+  el.modeProxied.checked = pendingMode === "proxied";
+  el.modeDirect.checked = pendingMode === "direct";
+  /* Frozen mid-check for the same reason Save is: the check commits the values it captured, and a
+     radio the visitor moved in the meantime would then disagree with what was saved. */
+  el.modeProxied.disabled = status === "blocked" || keyChecking;
+  el.modeDirect.disabled = keyChecking;
 
   const note = proxyNote(status, ENGINE_NAME);
   el.proxyNote.hidden = !note;
   el.proxyNote.textContent = note || "";
 
   const explanation = modeStateText({
-    preference,
+    preference: modePreference(),
     effective: currentMode(),
     engineName: ENGINE_NAME,
   });
-  el.modeState.textContent = modeFeedback ? modeFeedback + " " + explanation : explanation;
+  setStatus(el.modeState, modeFeedback ? modeFeedback + " " + explanation : explanation);
 }
 
-/* Clear is disabled alongside Save so a check cannot land after the visitor has asked for the key
-   to be removed and quietly write it back. */
-function renderKeyState() {
-  el.keySave.disabled = keyChecking;
+const CLEAR_STAGED_NOTE = "This key will be removed when you save.";
+
+/* The key field: the staged-clear cue or the refusal from the last Save, whichever applies, plus
+   the line saying what key this browser currently holds. Clear appears only when there is a saved
+   key left to remove, so its presence is itself the statement that one is still there. */
+function renderKeyField() {
+  const savedKey = Boolean((storedKey() || "").trim());
+  el.settingsSave.disabled = keyChecking;
+  el.keyClear.hidden = !savedKey || pendingClear;
   el.keyClear.disabled = keyChecking;
+
+  const note = keyError || (pendingClear ? CLEAR_STAGED_NOTE : "");
+  el.keyNote.hidden = !note;
+  el.keyNote.textContent = note;
+  el.keyNote.className = keyError ? "key-field__note key-field__note--error" : "key-field__note";
+  el.keyInput.classList.toggle("key-input--error", Boolean(keyError));
+  el.keyField.classList.toggle("key-field--error", Boolean(keyError));
+  /* Colour is a second signal only. aria-invalid is what tells a screen reader the field is the
+     problem, and the note it describes is what says why. */
+  if (keyError) el.keyInput.setAttribute("aria-invalid", "true");
+  else el.keyInput.removeAttribute("aria-invalid");
+
   const line = keyStateText({
     builtIn: typeof API_KEY === "string" && Boolean(API_KEY.trim()),
-    saved: Boolean((storedKey() || "").trim()),
+    saved: savedKey,
     engineName: ENGINE_NAME,
   });
-  el.keyState.textContent = keyFeedback ? keyFeedback + " " + line : line;
+  setStatus(el.keyState, [keyFeedback, line].filter(Boolean).join(" "));
 }
 
 function render() {
@@ -1289,7 +1376,7 @@ function render() {
   renderModeLine();
   renderTiming();
   renderModeChoice();
-  renderKeyState();
+  renderKeyField();
 
   if (arrivedAt && state.view === "home") el.homeInput.focus();
 }
@@ -1488,10 +1575,32 @@ function startSearch() {
 
 /* ---- settings ---- */
 
-/* The mode is stored apart from the key, so switching to Proxied and back never destroys a saved
-   key, and a visitor who has not chosen gets the default. */
-function chooseMode(value) {
-  const mode = normalizeMode(value);
+const STORAGE_BLOCKED_NOTE = "Private browsing mode is the usual cause.";
+
+/* Loads the saved settings into the form. Called on every navigation, so arriving at Settings
+   always shows what is actually saved and a form abandoned mid-edit leaves nothing behind. */
+function resetSettingsForm() {
+  pendingMode = modePreference();
+  pendingClear = false;
+  keyError = "";
+  el.keyInput.value = "";
+}
+
+/* Writes the whole form in one action. The key goes first, because a key that cannot be written is
+   a reason not to write the mode either: committing Direct on its own would produce the saved
+   "mode with no key" that validation exists to prevent. Returns the failure message, or null. */
+function commitSettings({ mode, key = "", clearKey = false }) {
+  if (key) {
+    if (!writeStore(localStorage, STORAGE_KEY, key)) {
+      return "This browser is blocking storage, so the key cannot be saved. " + STORAGE_BLOCKED_NOTE;
+    }
+  } else if (clearKey && !removeStore(localStorage, STORAGE_KEY)) {
+    return "This browser is blocking storage, so a saved key cannot be removed. "
+      + STORAGE_BLOCKED_NOTE;
+  }
+
+  /* The mode is stored apart from the key, so switching to Proxied and back never destroys a saved
+     key, and a visitor who has not chosen gets the default. */
   if (writeStore(localStorage, MODE_KEY, mode)) {
     modeMemory = null;
     modeFeedback = "";
@@ -1500,17 +1609,47 @@ function chooseMode(value) {
     modeFeedback = "This browser is blocking storage, so this choice will be forgotten when the "
       + "tab closes.";
   }
-  render();
+  return null;
 }
 
-/* A pasted key is checked against Keenable with a real search before it is stored, so a mistyped
-   one is rejected here rather than at the next search. */
-async function saveKey(key) {
-  /* Both buttons are disabled while a check runs, but a disabled submit button does not reliably
-     suppress implicit submission from the field itself. */
+/* Save. Nothing the visitor has touched in Settings has left this form until here, and either all
+   of it lands or none of it does — a refused key, a refused write, or a mode that cannot search
+   leaves every stored value exactly as it was.
+
+   A pasted key is checked against Keenable with a real search before anything is stored, so a
+   mistyped one is rejected here rather than at the next search. */
+async function saveSettings() {
+  /* Save is disabled while a check runs, but a disabled submit button does not reliably suppress
+     implicit submission from the field itself. */
   if (keyChecking) return;
-  if (!key) {
-    keyFeedback = "Enter a key to save, or use Clear to remove the saved one.";
+
+  const mode = pendingMode;
+  const typedKey = el.keyInput.value.trim();
+  /* What key would remain after this save, ignoring the one being typed: a staged Clear takes the
+     stored key away, and a key built into the file survives it — Clear cannot reach the config
+     block, and Direct works from a built-in key with nothing in storage at all. */
+  const builtInKey = typeof API_KEY === "string" ? API_KEY.trim() : "";
+  const keptKey = builtInKey || (pendingClear ? "" : storedKey());
+
+  /* The same test the Proxied radio's own availability comes from, so the way out this offers is
+     one the visitor can actually take. */
+  keyError = settingsError({
+    mode,
+    typedKey,
+    keptKey,
+    proxyUsable: currentProxyStatus() === "possible",
+  }) || "";
+  if (keyError) {
+    keyFeedback = "";
+    render();
+    el.keyInput.focus();
+    return;
+  }
+
+  if (!typedKey) {
+    const failure = commitSettings({ mode, clearKey: pendingClear });
+    keyFeedback = failure || (pendingClear ? "Key cleared." : "Settings saved.");
+    if (!failure) pendingClear = false;
     render();
     return;
   }
@@ -1520,29 +1659,30 @@ async function saveKey(key) {
   keyFeedback = "Checking that key with Keenable…";
   render();
 
-  /* The finally clause is the point: a throw between here and the end would otherwise leave both
-     Save and Clear disabled for good, with only a reload to undo it. */
+  /* The finally clause is the point: a throw between here and the end would otherwise leave Save
+     disabled for good, with only a reload to undo it. */
   try {
     const { save, text } = keyCheckResult(await requestSearch(KEY_CHECK_BODY, {
       mode: "direct",
-      key,
+      key: typedKey,
     }));
-    let message = text;
-    let stored = false;
-    if (save) {
-      stored = writeStore(localStorage, STORAGE_KEY, key);
-      if (!stored) {
-        message = "This browser is blocking storage, so the key cannot be saved. Private "
-          + "browsing mode is the usual cause.";
-      }
+    if (!save) {
+      /* keyCheckResult's own wording says nothing was saved, and nothing was: not the key, and
+         not the mode that was to go with it. */
+      if (check === keyCheckSeq) keyFeedback = text;
+      return;
     }
-    /* A key that passed the check is stored whether or not the visitor is still watching —
-       storing it is what they asked for. The message and the emptied field are held back once
-       they have navigated away, because by then the field may hold something they have started
-       typing and wiping it would destroy their work. */
+    const failure = commitSettings({ mode, key: typedKey });
+    /* A key that passed the check is stored whether or not the visitor is still watching — storing
+       it is what they asked for. The message and the emptied field are held back once they have
+       navigated away, because by then the field may hold something they have started typing and
+       wiping it would destroy their work. */
     if (check === keyCheckSeq) {
-      keyFeedback = message;
-      if (stored) el.keyInput.value = "";
+      keyFeedback = failure || text;
+      if (!failure) {
+        pendingClear = false;
+        el.keyInput.value = "";
+      }
     }
   } finally {
     keyChecking = false;
@@ -1571,6 +1711,7 @@ function applyRoute({ resubmitted = false } = {}) {
   keyFeedback = "";
   modeFeedback = "";
   keyCheckSeq += 1;
+  resetSettingsForm();
   const route = parseRoute(location.hash, location.search);
   const queryChanged = route.query !== state.query;
   state.view = route.view;
@@ -1640,32 +1781,49 @@ function start() {
     submitSearch(el.mastheadInput);
   });
 
+  /* The radio moves nothing but the form's own pending state. Every surface that reports the mode
+     goes on reading what is saved until Save says otherwise. */
   el.modeChoices.addEventListener("change", (event) => {
     if (event.target.name !== "mode") return;
-    chooseMode(event.target.value);
+    pendingMode = normalizeMode(event.target.value);
+    keyError = "";
+    render();
   });
 
-  el.keyForm.addEventListener("submit", (event) => {
+  /* Typing is what answers the refusal above, and it also supersedes a staged Clear: a replacement
+     key is not a removal. Both cases have to reach render — the error, the cue and the Clear link
+     all change — and nothing else here warrants a render per keystroke. */
+  el.keyInput.addEventListener("input", () => {
+    const supersedesClear = pendingClear && Boolean(el.keyInput.value.trim());
+    if (!keyError && !supersedesClear) return;
+    if (supersedesClear) pendingClear = false;
+    keyError = "";
+    render();
+  });
+
+  el.settingsForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    saveKey(el.keyInput.value.trim()).catch((error) => {
-      /* saveKey's own finally has already re-enabled the buttons; this replaces the stale
-         "Checking that key…" line so the visitor is not left watching a check that has died. */
+    saveSettings().catch((error) => {
+      /* saveSettings' own finally has already re-enabled Save; this replaces the stale "Checking
+         that key…" line so the visitor is not left watching a check that has died. */
       console.error(error);
       keyFeedback = "Something went wrong checking that key. Try again.";
       render();
     });
   });
 
+  /* Staged, not immediate: Clear empties the field and says what Save will do with it, so the
+     whole page keeps one rule — nothing changes until Save — and clearing the key out from under
+     Direct mode meets the same refusal as choosing Direct with no key. Focus follows the field it
+     just emptied, which is both where the visitor would type a replacement and where the cue is
+     announced. */
   el.keyClear.addEventListener("click", () => {
-    const had = storedKey();
-    if (!removeStore(localStorage, STORAGE_KEY)) {
-      keyFeedback = "This browser is blocking storage, so a saved key cannot be removed. Private "
-        + "browsing mode is the usual cause.";
-    } else {
-      keyFeedback = had ? "Key cleared." : "";
-    }
+    pendingClear = true;
+    keyError = "";
+    keyFeedback = "";
     el.keyInput.value = "";
     render();
+    el.keyInput.focus();
   });
 
   window.addEventListener("hashchange", () => applyRoute());
