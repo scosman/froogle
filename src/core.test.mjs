@@ -7,7 +7,7 @@
 // fails only when that function is called, so the guarantee reaches exactly as far as this suite's
 // coverage of the exports.
 //
-// Run with: node --test  (from the repo root; it discovers test/ on its own)
+// Run with: node --test  (from the repo root; it discovers src/*.test.mjs on its own)
 //
 // The .mjs extension, not .js: there is no package.json to declare module type, and relying on
 // Node's module-syntax detection would silently raise the floor to Node 20.19 / 22.7.

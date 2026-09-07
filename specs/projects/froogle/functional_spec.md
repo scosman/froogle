@@ -70,12 +70,14 @@ Mode is computed per search, so saving Settings takes effect immediately with no
 |---|---|---|
 | Downloads folder / `file://` | `index.html` | Direct (key in config or localStorage) |
 | Any static host | `index.html` | Direct |
-| Cloudflare Pages + Function | `index.html`, `functions/api/search.js` | Both |
+| Cloudflare Worker + assets | `index.html`, `src/`, `wrangler.jsonc` | Both |
 
-The proxy is a Cloudflare Pages Function at `/api/search`, which makes it **same-origin** with the
-page. There is therefore no CORS configuration on Froogle's own proxy, no preflight, and no origin
-allowlist to maintain. A self-hoster who wants only direct mode copies `index.html` and ignores the
-rest of the repo.
+The proxy answers at `/api/search` on the deployment's own origin, which makes it **same-origin**
+with the page. There is therefore no CORS configuration on Froogle's own proxy, no preflight, and no
+origin allowlist to maintain. `src/search.mjs` is the handler and `src/worker.mjs` is the Cloudflare
+adapter that routes that path to it; Workers has no file-based routing, so the route is written down
+rather than implied by a filename. A self-hoster who wants only direct mode copies `index.html` and
+ignores the rest of the repo.
 
 The repo is MIT licensed; `LICENSE` sits at the root.
 
@@ -83,7 +85,8 @@ The repo is MIT licensed; `LICENSE` sits at the root.
 
 * `index.html` — the whole frontend: markup, CSS, JS. No frameworks, no build step, no
   dependencies, no images, no network requests other than to the search API or the proxy.
-* `functions/api/search.js` — the proxy. Optional.
+* `src/search.mjs` — the proxy handler. Optional. `src/worker.mjs` and `src/serve.mjs` are the
+  adapters that route to it, on Cloudflare and on Node respectively.
 * `README.md`
 
 ## Configuration
@@ -101,8 +104,10 @@ it no longer decides the mode, which is the visitor's stored choice.
 
 `PROXY_PATH` is deliberately a **relative** path, and the repo ships deployable as-is:
 
-* Deployed whole to Cloudflare Pages, it resolves to that deployment's own Function. No
-  deploy-time substitution, no build step, no domain baked into the source.
+* Deployed whole to Cloudflare, it resolves to that deployment's own proxy. No deploy-time
+  substitution, no build step, no domain baked into the source. The path is therefore stated twice
+  — here, and in `src/worker.mjs`, which routes it — and the two must agree; `src/worker.test.mjs`
+  asserts that they do.
 * Copied as a lone `index.html` to any other static host, it resolves to *that* host, where nothing
   is listening. A self-hosted copy therefore **cannot** reach the original operator's proxy — a
   structural guarantee, unlike a hardcoded domain check, which is a client-side string anyone can

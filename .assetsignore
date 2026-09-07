@@ -1,0 +1,16 @@
+# Files under the assets directory that are not the site. Wrangler uploads everything in
+# assets.directory otherwise — Pages excluded functions/ and dotfiles on its own, Workers does not.
+.git/
+.gitignore
+.assetsignore
+wrangler.jsonc
+src/
+specs/
+README.md
+LICENSE
+
+# Local-only directories, mirroring .gitignore. They are absent from a CI deploy, which builds from
+# a fresh clone, and present in the working tree of anyone who runs `wrangler deploy` by hand —
+# where without these lines the deployment would carry local dev state onto the public site.
+.wrangler/
+.specs_skill_state/

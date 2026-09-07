@@ -540,7 +540,7 @@ const PROXY_PATH = "/api/search";
 
 // ---- FROOGLE:CORE:BEGIN ----
 // Pure functions only. No DOM, no network, no storage, no globals beyond the language and URL.
-// test/core.test.mjs evaluates this region on its own: the sandbox holds no document, fetch or
+// src/core.test.mjs evaluates this region on its own: the sandbox holds no document, fetch or
 // storage, so a top-level reference to one fails at load and a reference inside a function body
 // fails the moment a test calls it.
 
@@ -766,9 +766,9 @@ function selectMode({ preference, key, protocol, proxyKnownBad, proxyPath } = {}
    and returns 200 with HTML.
 
    That last inference rests on a guarantee the proxy makes and not on an assumption about proxies
-   in general: functions/api/search.js turns a 2xx it cannot itself parse into a 502, so a
-   successful response from a real proxy is always parseable JSON. Without that, a malformed 200
-   from Keenable would make a working deployment frame itself as a missing one.
+   in general: src/search.mjs turns a 2xx it cannot itself parse into a 502, so a successful
+   response from a real proxy is always parseable JSON. Without that, a malformed 200 from Keenable
+   would make a working deployment frame itself as a missing one.
 
    Status 0 is deliberately absent, though it used to be here. It means fetch rejected, and on a
    same-origin path that is a dropped connection rather than a CORS block — one bad moment on a
