@@ -142,10 +142,35 @@ lint-style comment marks it as such.
 * Result links carry `rel="noopener noreferrer"`.
 * `<meta name="referrer" content="no-referrer">` on the document, so no outbound click leaks the
   page URL even when a visitor arrived on a legacy `?q=` link.
-* A `Content-Security-Policy` meta tag restricting `default-src 'none'`, `connect-src` to the
-  Keenable origin and `'self'`, `style-src 'unsafe-inline'`, `script-src 'unsafe-inline'`. Inline
-  script and style are unavoidable in a single-file app; the value is in `default-src 'none'`,
-  which blocks any image, frame, font, or object a compromised result could try to pull.
+* A `Content-Security-Policy` meta tag, placed as the first element in `<head>` so it governs
+  everything after it:
+
+  ```html
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    script-src 'unsafe-inline';
+    style-src 'unsafe-inline';
+    img-src data:;
+    connect-src 'self' https://api.keenable.ai;
+    form-action 'none';
+    base-uri 'none'">
+  ```
+
+  `'unsafe-inline'` is forced, not lazy. A single-file app has no external script to point
+  `'self'` at. Nonces need a server to generate a fresh value per response. Hashes do work for
+  static files, but the hash covers the inline script — and the top of that script is exactly
+  where a self-hoster edits `SEARCH_ENGINE_NAME` and `API_KEY`, so any config change would break
+  the hash and white-screen the page. That trades away the project's central property.
+
+  The value therefore sits in the other directives. `default-src 'none'` closes every fetch
+  directive not named, so an attacker-authored search result cannot beacon out through an
+  `<img>`, pull a frame, font, or object, or reach the network anywhere but Keenable and our own
+  origin. `img-src data:` exists solely for the inline SVG favicon, which `img-src` governs.
+
+  Known gaps: `frame-ancestors` and `report-uri` are ignored in meta tags, so clickjacking
+  protection is only available to a hosted instance that adds the header at the edge. And once
+  `'unsafe-inline'` is granted, CSP constrains where data can go, not whether injected code runs
+  — the primary defense remains the `textContent` discipline and the URL scheme check above.
 
 ### Storage
 
