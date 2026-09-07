@@ -22,13 +22,15 @@ from the key, and constrained only by what a given copy of the page can actually
 ## The repo
 
 * `index.html` — the entire frontend. Markup, CSS, and JS in one file.
-* `functions/api/search.js` — the optional proxy (Cloudflare Pages Function, same-origin).
+* `src/search.mjs` — the optional proxy, same-origin, plus the thin adapters that route to it
+  (`src/worker.mjs` on Cloudflare, `src/serve.mjs` on Node).
 * `README.md`, `LICENSE` (MIT)
 
 ## Self hosting
 
-"Anywhere you can host an HTML file" — GitHub Pages, S3, Cloudflare Pages, Netlify, a static
-nginx, or your own Downloads folder opened over `file://`.
+"Anywhere you can host an HTML file" — GitHub Pages, S3, Cloudflare, Netlify, a static nginx, or
+your own Downloads folder opened over `file://`. Shared mode additionally needs a host that runs the
+proxy; the repo ships ready to deploy as a Cloudflare Worker.
 
 ## Config
 

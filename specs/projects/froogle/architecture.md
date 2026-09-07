@@ -19,17 +19,40 @@ one `<script>`.
 
 ```
 index.html                 the whole frontend
-functions/api/search.js    the proxy (Cloudflare Pages Function). Optional.
-test/core.test.mjs         unit tests for the frontend's pure core
-test/proxy.test.mjs        unit tests for the proxy
+src/search.mjs             the proxy handler, (request, env) => Response. Optional.
+src/worker.mjs             Cloudflare adapter: routing only, and the deployment's entry point
+src/serve.mjs              Node adapter: the local dev server
+src/*.test.mjs             unit tests
+wrangler.jsonc             Cloudflare deployment config
+.assetsignore              what the Workers asset upload must leave out
 README.md
 LICENSE                    MIT
 ```
 
-`test/` is dev-only and affects nothing at deploy time. It needs no `npm install`: Node 18+ ships
-`node --test`. The `.mjs` extension is load-bearing — with no `package.json` to declare the module
-type, an ESM `.js` test loads only through Node's module-syntax detection, which would silently
-raise the floor from Node 18 to Node 20.19 / 22.7.
+The root holds `index.html` and configuration, and nothing else. That is not tidiness: the deployed
+site *is* the repo root — `wrangler.jsonc` points the asset directory at `./` so that `index.html`
+stays at the top level and can be downloaded and opened on its own — so anything at the root is a
+file a visitor could request. `.assetsignore` is what keeps `src/`, `specs/` and the rest out of the
+upload, and `src/serve.mjs` reads the same file so a path that 404s in production 404s in dev.
+
+`src/*.test.mjs` is dev-only and affects nothing at deploy time. It needs no `npm install`: Node 18+
+ships `node --test`. The `.mjs` extension is load-bearing everywhere in `src/` — with no
+`package.json` to declare the module type, an ESM `.js` file loads only through Node's
+module-syntax detection, which would silently raise the floor from Node 18 to Node 20.19 / 22.7.
+
+### The proxy is split from the platform
+
+`search.mjs` holds every decision about a search and uses nothing outside the Minimum Common Web
+Platform API, so it runs unmodified on any compliant runtime. The adapters hold routing and nothing
+else: `worker.mjs` for Cloudflare, `serve.mjs` for Node.
+
+The split is a correctness measure, not a portability wish. The proxy was originally a Cloudflare
+Pages Function — a file at `functions/api/search.js` exporting `onRequestPost`, where the file path
+*was* the route. The deployment is a Worker, and Workers has no file-based routing: that directory
+uploaded as static files and nothing answered at `/api/search`, so every search fell back to the key
+prompt. `wrangler pages dev` kept passing locally, because it emulates Pages rather than the product
+being deployed to. With the route written down in `worker.mjs` and `serve.mjs` calling that same
+module, dev and production agree by construction rather than by luck.
 
 ## Frontend
 
@@ -268,11 +291,11 @@ reports that the choice will be forgotten when the tab closes.
 
 ## Proxy
 
-`functions/api/search.js`, a Cloudflare Pages Function exporting `onRequestPost`. Same-origin with
-the page, so no CORS handling, no preflight, no origin allowlist.
+`src/search.mjs`, reached at `/api/search` — same-origin with the page, so no CORS handling, no
+preflight, no origin allowlist. `src/worker.mjs` is what puts it at that path.
 
 ```js
-export async function onRequestPost({ request, env })
+export async function handleSearch(request, env)
 
 allowlistBody(raw)          -> { ok: true, value } | { ok: false, message }
 credentialChain(env)        -> Array<{title} | {key}>   // one entry, or two in configured order
@@ -366,10 +389,10 @@ No stack traces or raw status codes reach the UI. The proxy logs nothing.
 ## Testing strategy
 
 Node's built-in test runner. Zero dependencies and no `package.json`; run it as `node --test` from
-the repo root, which discovers `test/` on its own. Not `node --test test/` — Node resolves a bare
-directory argument as a module and fails.
+the repo root, which discovers `src/*.test.mjs` on its own. Not `node --test src/` — Node resolves a
+bare directory argument as a module and fails.
 
-### `test/core.test.mjs`
+### `src/core.test.mjs`
 
 Reads `index.html`, extracts the text between the `FROOGLE:CORE` markers, and evaluates it in a
 `node:vm` context seeded with nothing but the language built-ins plus `URL` and `URLSearchParams`,
@@ -426,9 +449,9 @@ Cases:
 * `keyCheckResult` — success saves; 401 and 403 refuse; 402 saves with the out-of-credits note;
   every other status saves with the unverified note; no message leaks a raw status code.
 
-### `test/proxy.test.mjs`
+### `src/search.test.mjs`
 
-Imports `functions/api/search.js` directly — it is a plain ES module — and injects a stub `fetch`.
+Imports `src/search.mjs` directly — it is a plain ES module — and injects a stub `fetch`.
 
 * Fallback order under `UNAUTHENTICATED_FIRST` true and false.
 * Fallback fires on 401, 402, 429, 5xx; does **not** fire on 400.
@@ -444,6 +467,23 @@ Imports `functions/api/search.js` directly — it is a plain ES module — and i
   or not.
 * The upstream request carries `X-Keenable-Title` on the keyless call and `X-API-Key` on the keyed
   call, and never both.
+
+### `src/worker.test.mjs`
+
+Calls the adapter's default export with a stub `ASSETS` binding, which records rather than serves.
+
+* A path that is not the proxy path reaches the assets binding, including the near misses
+  `/api/search/extra` and `/api/searchx`. A query string does not stop the proxy path matching.
+* A non-POST on the proxy path is a 405 carrying `Allow: POST`, and never reaches the assets
+  binding. The status is load-bearing: `proxyUnavailable` reads it as proof no proxy is there, so
+  it has to be the status Pages used to return, and this pins it.
+* A POST on the proxy path reaches the handler, evidenced by the handler's own validation answering.
+* `index.html`'s `PROXY_PATH` reaches the proxy rather than the assets binding. The path is
+  necessarily duplicated — the page cannot import from a Worker module, and `worker.mjs` cannot
+  export the constant, because the Workers runtime reads every named export of the entry module as
+  a handler and refuses a string one at startup. Drift between the two is silent and self-
+  concealing: the page reads the resulting 404 as proof the deployment has no proxy at all. The
+  test reads the constant out of `index.html` and exercises the adapter with it.
 
 ### Manual checklist
 

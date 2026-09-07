@@ -6,6 +6,10 @@ status: complete
 
 Three phases. Each ends with a working, reviewable artifact and its tests passing.
 
+The phases below are a record of what was built and are left in their original wording. Two paths in
+them have since moved: the proxy is `src/search.mjs`, reached through the adapters `src/worker.mjs`
+and `src/serve.mjs`, and the tests are `src/*.test.mjs`. See `architecture.md` for why.
+
 ## Phases
 
 - [x] **Phase 1: Shell.** `index.html` end to end with no network: design tokens and layout,
