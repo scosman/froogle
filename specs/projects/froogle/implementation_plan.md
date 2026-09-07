@@ -38,9 +38,9 @@ Three phases. Each ends with a working, reviewable artifact and its tests passin
       a measured search-timing line, and `LICENSE`. `ui_design.md`, `functional_spec.md`,
       `architecture.md` and `project_overview.md` were rewritten with it.
 
-      **Shared mode was renamed "proxied" in this pass.** The plans in `phase_plans/` are a record of
-      what was built at the time and keep the older name throughout; nothing in them was edited
-      after the fact.
+      **Shared mode was renamed "proxied" in this pass.** The three phase entries above and the
+      plans in `phase_plans/` are a record of what was built at the time and keep the older name
+      throughout; nothing in either was edited after the fact.
 
 ## Later
 

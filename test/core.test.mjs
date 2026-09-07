@@ -368,11 +368,12 @@ test("proxyStatus calls a proxy impossible only where it structurally is", () =>
     "blocked");
   assert.equal(core.proxyStatus({ protocol: "https:", proxyPath: path, proxyKnownBad: true }),
     "missing");
+  // "possible" is also the answer before anything has asked, which is the whole reason the page
+  // cannot decide the mode from the deployment alone.
   for (const protocol of ["http:", "https:"]) {
     assert.equal(core.proxyStatus({ protocol, proxyPath: path, proxyKnownBad: false }), "possible");
   }
-  // "possible" is also the answer before anything has asked, which is the whole reason the page
-  // cannot decide the mode from the deployment alone.
+  // Called with nothing: no protocol and no path is a page with nothing behind it, not "possible".
   assert.equal(core.proxyStatus(), "blocked");
 });
 
@@ -743,10 +744,21 @@ test("modeLabel names the mode a search would actually use", () => {
 test("proxyNote gives a reason only where Proxied cannot be honoured", () => {
   assert.equal(core.proxyNote("possible", "Froogle"), null);
   assert.match(core.proxyNote("blocked", "Froogle"), /no server behind it/);
-  assert.match(core.proxyNote("missing", "Froogle"), /has no proxy/);
-  assert.match(core.proxyNote("missing", "Froogle"), /switch to Direct and add a key/);
+  assert.match(core.proxyNote("missing", "Froogle"), /nothing is answering/);
   assert.match(core.proxyNote("blocked", RENAMED), new RegExp("copy of " + RENAMED));
+  assert.match(core.proxyNote("missing", RENAMED), new RegExp("copy of " + RENAMED));
   assert.match(core.proxyNote("missing"), /copy of Froogle/);
+});
+
+test("proxyNote states the deployment fact and gives no advice", () => {
+  // Advice belongs to modeStateText, the only one of the two that knows whether a key is saved.
+  // A note telling a visitor to "switch to Direct and add a key" would otherwise appear on the
+  // same screen as a line saying searches already go direct with the key they already added.
+  for (const status of ["blocked", "missing"]) {
+    const note = core.proxyNote(status, "Froogle");
+    assert.doesNotMatch(note, /switch|add a key|instead|Settings/i,
+      `the ${status} note should not advise: ${note}`);
+  }
 });
 
 test("modeStateText restates the chosen mode when it is the one running", () => {

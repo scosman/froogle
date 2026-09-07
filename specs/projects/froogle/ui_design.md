@@ -58,7 +58,7 @@ hover response, and the `--ink` value written inline in the static favicon `<lin
 startup.
 
 > **On the grey.** The reference mockups use three greys, down to `#a8a8a8` for the timing. This
-> implementation collapses them to one, `--ink-muted` at 4.6:1 on white, because the URL line, the
+> implementation collapses them to one, `--ink-muted` at 5.1:1 on white, because the URL line, the
 > timing and the placeholders are all *text*, and the project's accessibility rule is that text
 > meets WCAG AA. The hierarchy the extra greys carried is recovered through size, tracking and
 > uppercasing instead. `--rule` is a border color and is never used for text.
@@ -195,17 +195,25 @@ can say the chosen mode is not the one running:
 | Proxied | *(no key)* | Proxied is not available here, so searching needs a Keenable API key. |
 | Direct | *(no key)* | Direct mode needs a Keenable API key before it can search. |
 
-Where Proxied cannot be honoured, a note in `--alert` sits under it:
+Where Proxied cannot be honoured, a note in `--alert` sits under it, associated with the radio by
+`aria-describedby` so the reason reaches a screen reader that has just been told the control is
+dimmed:
 
 | Proxy status | When | Note | Radio |
 |---|---|---|---|
-| `blocked` | `file://`, or `PROXY_PATH` empty | "Not available here: this copy of Froogle has no server behind it to proxy through, so searches use Direct instead." | Disabled |
-| `missing` | A request proved nothing answers at `PROXY_PATH` | "This copy of Froogle has no proxy — switch to Direct and add a key." | **Enabled** |
+| `blocked` | `file://`, or `PROXY_PATH` empty | "Not available here: this copy of Froogle has no server behind it to proxy through." | Disabled |
+| `missing` | A request proved nothing answers at `PROXY_PATH` | "Not available here: nothing is answering at this copy of Froogle's proxy path." | **Enabled** |
 
-The asymmetry is deliberate. `blocked` is structural and permanent for that deployment, so the
-choice is disabled rather than offered and left to fail. `missing` was *learned* this session and
-may be wrong tomorrow — the same file redeployed behind a Function has a proxy — so the radio stays
-usable and the stored preference is left intact, to be honoured the moment one answers.
+Each note states a fact about the deployment and stops there. What to *do* about it belongs to the
+state line above, which is the only one of the two that knows whether a key is saved: a note
+reading "switch to Direct and add a key" would otherwise land on the same screen as a state line
+saying searches already go direct with the key the visitor already added. One source of advice.
+
+The asymmetry in the last column is deliberate. `blocked` is structural and permanent for that
+deployment, so the choice is disabled rather than offered and left to fail. `missing` was
+*learned* this session and may be wrong tomorrow — the same file redeployed behind a Function has
+a proxy — so the radio stays usable and the stored preference is left intact, to be honoured the
+moment one answers.
 
 The key form sits below, under its own heading, and its state line reports only what key this
 browser holds. It says nothing about the mode: the line under the radios owns that, and two lines
@@ -242,7 +250,7 @@ error, and on every view but Results.
 * Results are a `<ul>`, so screen readers announce the count.
 * The notice, the mode state line and the key state line are all `role="status" aria-live="polite"`.
 * `document.title` updates to `query — Froogle` on the results view.
-* All text meets WCAG AA against `--bg`: `--body` at 10.9:1, `--ink-muted` at 4.6:1, `--link` at
+* All text meets WCAG AA against `--bg`: `--body` at 10.9:1, `--ink-muted` at 5.1:1, `--link` at
   8.5:1, `--alert` at 6.5:1. `--rule` is a border color and never carries text.
 * No color is the sole carrier of meaning.
 

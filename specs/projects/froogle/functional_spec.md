@@ -300,8 +300,8 @@ running a public instance is expected to put a platform rate-limiting rule (a Cl
 Limiting rule, or the equivalent on another host) in front of it.
 
 Keenable sees the proxy's egress IP, not the visitor's, so the keyless allowance is consumed per
-Cloudflare egress IP and shared with all other traffic from that IP. The fallback to the operator's key
-exists precisely because that allowance is unpredictable.
+Cloudflare egress IP and shared with all other traffic from that IP. The fallback to the
+operator's key exists precisely because that allowance is unpredictable.
 
 ## Error handling
 

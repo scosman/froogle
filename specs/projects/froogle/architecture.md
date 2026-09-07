@@ -195,8 +195,8 @@ mean something is there and is broken. Retiring the proxy on any of them would s
 a flaky connection *and* flip the About page to a claim that is then false.
 
 The flag is mirrored in a module-level variable, because `writeStore` returns false in Safari's
-"block all cookies" and an unrecorded probe would leave the notice and the footer disagreeing
-about the very same question.
+"block all cookies" and an unrecorded probe would leave the search notice and the Settings mode
+lines disagreeing about the very same question.
 
 There is no matching "the proxy answered" flag any more. It existed to drive three variants of
 deployment-conditional prose on About and Settings; the mode is now chosen rather than inferred, so
@@ -205,9 +205,9 @@ it is before it has asked.
 
 ### Rendering and injection safety
 
-Results are built with `document.createElement` and `textContent`. `innerHTML` is used nowhere in
-the result path — the only `innerHTML` in the file is the static view markup authored by us, and a
-lint-style comment marks it as such.
+Results are built with `document.createElement` and `textContent`. `innerHTML` appears nowhere in
+`index.html` at all — not in the result path and not in the view markup, which is authored as HTML
+in the document rather than assembled by the script.
 
 * `href` is set only after `isLinkableUrl` passes, which parses with `new URL()` and requires
   `http:` or `https:`. This blocks `javascript:`, `data:`, and `vbscript:` URLs.
@@ -358,8 +358,8 @@ same generic message rather than a guess. `"unreadable"` is the neighbouring cas
 arrive, and its body was not JSON.
 
 The two read identically to the visitor, and exist as separate statuses for one reason — the
-proxied-mode proxy probe above, where "the server answered with a web page" is proof there is no proxy and
-"the connection dropped" is proof of nothing.
+proxied-mode proxy probe above, where "the server answered with a web page" is proof there is no
+proxy and "the connection dropped" is proof of nothing.
 
 No stack traces or raw status codes reach the UI. The proxy logs nothing.
 

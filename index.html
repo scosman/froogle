@@ -268,6 +268,13 @@ a:visited { color: var(--link-visited); }
   border-bottom-color: var(--link);
   box-shadow: 0 1px 0 0 var(--link);
 }
+/* forced-colors drops box-shadow entirely and overrides border-color with a system color, so the
+   replacement focus indicator above would leave a keyboard user with nothing on either field. */
+@media (forced-colors: active) {
+  .search__field:focus,
+  .key-input:focus { outline: 2px solid Highlight; outline-offset: 2px; }
+}
+
 .key-buttons { display: flex; gap: 10px; margin-top: 18px; }
 .button-secondary {
   border: 1px solid var(--ink);
@@ -438,7 +445,8 @@ a:visited { color: var(--link-visited); }
 
       <div class="choice-group">
         <label class="choice" for="mode-proxied">
-          <input type="radio" name="mode" value="proxied" id="mode-proxied">
+          <input type="radio" name="mode" value="proxied" id="mode-proxied"
+                 aria-describedby="proxy-note">
           <span class="choice__name">Proxied</span>
           <span class="choice__default">default</span>
         </label>
@@ -911,15 +919,21 @@ function modeLabel(mode) {
   return "Mode: no key";
 }
 
-/* The one-line reason the Proxied choice cannot be honoured here, or null when it can. */
+/* The one-line reason the Proxied choice cannot be honoured here, or null when it can.
+
+   Strictly a statement about the deployment: what is or is not behind this copy of the page.
+   What the visitor should do about it belongs to modeStateText, which is the only one of the two
+   that knows whether a key is saved — a note reading "switch to Direct and add a key" would tell
+   a visitor who has already done both to do them again, on the same screen as the line saying
+   searches are already going direct with their saved key. One source of advice, not two racing. */
 function proxyNote(status, engineName) {
   const name = resolveEngineName(engineName);
   if (status === "blocked") {
     return "Not available here: this copy of " + name + " has no server behind it to proxy "
-      + "through, so searches use Direct instead.";
+      + "through.";
   }
   if (status === "missing") {
-    return "This copy of " + name + " has no proxy — switch to Direct and add a key.";
+    return "Not available here: nothing is answering at this copy of " + name + "'s proxy path.";
   }
   return null;
 }
