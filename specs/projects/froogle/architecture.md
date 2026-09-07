@@ -132,8 +132,8 @@ escapeXml(text) -> string
 errorMessage({ status, mode, engineName }) -> { text, action }   // action: null | "settings"
 modeLabel(mode)                           -> string             // the utility-row mode line
 proxyNote(status, engineName)             -> string | null      // why Proxied cannot be honoured
-modeStateText({ preference, effective, engineName }) -> string   // what searches actually do
 keyStateText({ builtIn, saved, engineName })         -> string   // which key this browser holds
+settingsError({ mode, typedKey, keptKey, proxyUsable }) -> string | null  // why Save refuses
 formatElapsed(ms) -> string | null        // "0.19 seconds", or null for a non-measurement
 
 // Settings: what a validation search's outcome means for a pasted key, given the shape the client
@@ -285,9 +285,23 @@ stored.
 
 Two of the three are mirrored in module-level variables for the case where the write itself is
 refused: `proxyMissing`, so the page cannot go on believing in a proxy the notice in front of the
-visitor says is absent, and `modeMemory`, so a radio the visitor just clicked works for the rest of
+visitor says is absent, and `modeMemory`, so a mode the visitor just saved works for the rest of
 the tab instead of snapping back with no explanation. Both say so in the UI — the Settings line
 reports that the choice will be forgotten when the tab closes.
+
+### Settings is a form
+
+The mode radio and the Clear control write nothing. They live in three module-level variables —
+`pendingMode`, `pendingClear`, `keyError` — that no other part of the page reads; `resetSettingsForm`
+loads them from storage on every navigation. Every surface that reports the mode (both utility
+rows, the Settings state line, and `runSearch` itself) goes through `modePreference()`, which reads
+only what is saved, so a pending choice cannot leak into the masthead or into a search.
+
+`saveSettings` is the one path from the form into storage, and it is all-or-nothing. It reads
+`settingsError` first and writes nothing when that refuses; it validates a typed key with a real
+request and writes nothing when Keenable rejects it; and `commitSettings` writes the key before the
+mode, returning early if that write is refused, because committing Direct with a key that could not
+be stored would produce exactly the unsearchable saved state `settingsError` exists to prevent.
 
 ## Proxy
 
@@ -359,9 +373,9 @@ things escape that: `searchRequest` refusing an unrecognized mode, which throws 
 block on purpose, and a bug anywhere after the `await` — in `render()`, say. Both are caught at the
 call site, which is why the async entry points (`startSearch`, and the Settings save handler) are
 invoked through a `.catch()` rather than `void`. Without it either one is a silent unhandled
-rejection that leaves the page stuck on "Searching…", or Save and Clear disabled, until a reload.
-`saveKey` additionally re-enables its buttons from a `finally`, so the recovery does not depend on
-that catch running first. Status codes:
+rejection that leaves the page stuck on "Searching…", or Save and the mode radios disabled, until a
+reload. `saveSettings` additionally re-enables its controls from a `finally`, so the recovery does
+not depend on that catch running first. Status codes:
 
 | Status | Source | Recoverable |
 |---|---|---|
@@ -435,9 +449,13 @@ Cases:
 * `errorMessage` — every status, the mode-dependent difference at 429, the two no-search sentinels
   (`"nokey"` and `"noproxy"`, the latter differing by whether a key is there to fall back on), and
   a non-default `engineName` reaching every message that names the engine.
-* `modeLabel` / `proxyNote` / `modeStateText` / `keyStateText` — the mode line for each mode; a
-  reason only where Proxied cannot be honoured; the state line for every combination of chosen and
-  effective mode; and that the key line says nothing about the mode.
+* `modeLabel` / `proxyNote` / `keyStateText` — the mode line for each mode; a
+  reason only where Proxied cannot be honoured, stating the deployment fact and giving no advice;
+  and that the key line says nothing about the mode and nothing at all for an
+  empty browser.
+* `settingsError` — Direct with no key typed, kept or built in is the one refusal; a typed key, a
+  kept key, and Proxied with nothing at all each commit; and the refusal offers Proxied as the way
+  out only when `proxyUsable`.
 * `formatElapsed` — two decimals of a second, and null for anything that is not a measurement.
 * `escapeXml` — the five characters that would break the inline SVG favicon.
 * `buildRequestBody` — always sets `mode`, `max_results`, `snippet_max_length`; includes filters
@@ -490,7 +508,11 @@ Calls the adapter's default export with a stub `ASSETS` binding, which records r
 Browser-level behavior that cannot be unit tested, recorded in the README:
 
 * Loads and searches from `file://` with a stored key, with Proxied shown disabled and its reason.
-* Switching mode in Settings and back leaves a saved key intact.
+* Moving the mode radio changes nothing until Save: the utility-row mode line, the Settings state
+  line and a search all keep reporting the saved mode.
+* A refused Save — Direct with no key, or a staged Clear under Direct — writes neither the mode nor
+  the key, reddens the field and moves focus to it.
+* Saving Direct and back to Proxied leaves a saved key intact.
 * Back and forward move between home, results, about, and settings.
 * A legacy `?q=` URL normalizes to `#q=` with no extra history entry.
 * Keyboard-only operation, visible focus throughout, radios included.

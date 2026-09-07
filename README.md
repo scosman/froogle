@@ -40,14 +40,19 @@ The choice lives in `localStorage` at `froogle.mode`, **separately from the key*
 `froogle.key`, so switching to Proxied and back never throws a saved key away. It defaults to
 Proxied.
 
-The mode is applied per search, so switching modes or saving a key takes effect immediately with
-no reload, and the mode in use is shown on every view next to the About and Settings links.
+Settings is a form: the radio and the Clear link are pending until you press Save, which commits
+the mode and the key together or neither. That is what makes Direct-with-no-key unreachable —
+saving it is refused on the key field rather than accepted and then reported everywhere as
+"Mode: no key".
+
+The mode is applied per search, so saving Settings takes effect immediately with no reload, and the
+mode in use is shown on every view next to the About and Settings links.
 
 Where a choice cannot be honoured, Froogle says so rather than quietly doing something else:
 
 | Chosen | Situation | What Froogle does |
 |---|---|---|
-| Direct | No key saved | The search stops and asks for a key. The setting stays on Direct. |
+| Direct | No key saved | Settings will not save this combination; it survives only from outside, such as storage being cleared. The search then stops and asks for a key, and the setting stays on Direct. |
 | Proxied | `file://`, or `PROXY_PATH` set to `""` | There is no server to proxy through, so Proxied is shown disabled with the reason, and searches use Direct. |
 | Proxied | Nothing answers at `PROXY_PATH` — a lone `index.html` on a static host | The search says this copy has no proxy, and points at Direct plus a key. **The setting is kept**, so redeploying the same file behind a Function honours it again with nothing to re-choose. |
 
@@ -63,9 +68,9 @@ Where a choice cannot be honoured, Froogle says so rather than quietly doing som
 
 ### Downloads folder
 
-Save `index.html`, open it, and paste a Keenable key into Settings. There is no proxy over
-`file://` and there never can be, so Froogle never attempts one — no doomed request, no console
-error.
+Save `index.html`, open it, then paste a Keenable key into Settings and press Save. There is no
+proxy over `file://` and there never can be, so Froogle never attempts one — no doomed request, no
+console error.
 
 ### A static host
 
@@ -261,10 +266,16 @@ shipping a change to the browser layer.
 
 - [ ] On a deployed Worker, or against `node src/serve.mjs`, a first-time visitor searches with no
       setup, the mode line reads "Mode: Proxied", and the request goes to `/api/search`.
-- [ ] Switching to Direct with no key saved: the next search stops and asks for a key, the radio
-      **stays** on Direct, and the mode line reads "Mode: no key".
-- [ ] Saving a key then flips the mode line and the next search to direct with no reload.
-- [ ] Switching back to Proxied and then to Direct again does **not** lose the saved key.
+- [ ] Moving the mode radio changes **nothing** until Save: the mode line in the utility row, the
+      state line under the radios, and a search all keep reporting the saved mode.
+- [ ] Save with Direct chosen and no key saved is **refused** — the key field goes red, the reason
+      appears under it, focus lands in it, and neither the mode nor the key is written.
+- [ ] Save with Direct and a key flips the mode line and the next search to direct with no reload.
+- [ ] Save with a key Keenable rejects writes **nothing**, the mode included.
+- [ ] Clear, beside the key field's label, only stages the removal: the key survives until Save,
+      and Save under Direct with nothing typed is refused like any other keyless Direct.
+- [ ] Saving Direct and then Proxied again does **not** lose the saved key.
+- [ ] Leaving Settings mid-edit and coming back shows the saved mode and an empty key field.
 - [ ] `index.html` alone on a static host with no Worker: the first search costs one request and
       lands on "this copy has no proxy"; every later search in that session makes no request to
       `/api/search` at all; the Proxied radio stays **enabled** and stays chosen, with its reason

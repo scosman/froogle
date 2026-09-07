@@ -36,8 +36,8 @@ Declared once as CSS custom properties on `:root`.
 | `--body` | `#3d3d3d` | Snippets and prose body |
 | `--link` | `#1734d4` | Links, result titles, focus ring, focused field rule |
 | `--link-visited` | `#6b2ea8` | Visited links |
-| `--alert` | `#b3261e` | Error notices and the "Proxied is unavailable" note |
-| `--rule` | `#eeeeee` | The masthead hairline, and the secondary button's hover face |
+| `--alert` | `#b3261e` | Error notices, the "Proxied is unavailable" note, and the key field's refused-save state |
+| `--rule` | `#eeeeee` | The masthead hairline |
 | `--measure` | `660px` | Column width for the masthead and every page body |
 
 Type: one stack, `"Helvetica Neue", Helvetica, "Segoe UI", "Liberation Sans", Arial, sans-serif`,
@@ -125,8 +125,9 @@ Settings echoes them rather than inventing a second wording.
 
 ### Settings
 
-Two radios for the mode, each with the About bullet beneath it, then one line saying what searches
-will actually do, then the key form. See **Mode** below.
+One form: two radios for the mode, each with the About bullet beneath it, the key field indented
+inside the Direct choice, and a single Save. Two status lines follow it — what searches will
+actually do, and what key this browser holds. See **Mode** below.
 
 ## Components
 
@@ -137,8 +138,7 @@ will actually do, then the key form. See **Mode** below.
 | Utility row | About · Settings · mode line, plus the timing on results. One per search form |
 | Result item | `<li>` containing title link, URL line, snippet |
 | Notice | One block used for errors, the empty state, and the two no-search states. `role="status"` |
-| Mode radios | Settings only |
-| Key form | Settings only |
+| Settings form | Settings only. The mode radios, the key field nested in the Direct choice, and one Save |
 
 ### Fields and buttons
 
@@ -154,8 +154,15 @@ restores a real `2px solid Highlight` outline on `.search__field:focus` and `.ke
 It is load-bearing, not belt-and-braces: delete it and the two fields lose their focus state in
 Windows High Contrast.
 
-The submit button is solid `--ink` with `--on-ink` text and square corners. Clear is its outline
-counterpart. Both go `--ink-muted` when disabled.
+The submit button is solid `--ink` with `--on-ink` text and square corners, and goes `--ink-muted`
+when disabled. Clear is not a second button: it is a 12px `--link` control beside the key field's
+label, because it is a quiet secondary action on that one field rather than a peer of Save. It is
+a `<button>`, not an anchor — it acts, it does not navigate.
+
+A refused save reddens the key field: its label, its rule (`--alert`, doubled to the same weight
+the focus rule uses), and the note beneath it. Focus reverts to a real `2px --link` outline for as
+long as that lasts, because the rule cannot be red and blue at once and the save moves focus into
+the field, so both states are always on screen together.
 
 ### Result item
 
@@ -173,6 +180,12 @@ The mode is **chosen**, not derived. The visitor's preference lives at `froogle.
 switching modes never destroys a saved key. `selectMode` then constrains that preference by what
 this copy of the page can actually do; the preference itself is never rewritten.
 
+Choosing is not the same as saving. The radio is **pending form state**: it moves nothing outside
+the Settings form until Save commits it, which is what makes an unsearchable combination
+unreachable rather than merely reported. Everything that reports the mode — both utility rows, the
+state line under the radios, and the search path — reads the *saved* preference, so the masthead
+never shows a mode that has not been committed.
+
 ### The mode line
 
 One line in each utility row, 12px `--ink-muted`, always a link to Settings, so the line that
@@ -189,18 +202,39 @@ would use:
 search and saying "Direct" would claim it can. Home and the masthead each carry one of these
 lines; they are rendered by one function from one state, so they cannot disagree.
 
-### The Settings radios
+### The Settings form
 
-Both choices are always shown with their About wording. Below them, one line — the only place that
-can say the chosen mode is not the one running:
+Everything in Settings is one form, saved by one button:
 
-| Chosen | Running | Line |
-|---|---|---|
-| Proxied | Proxied | Searches go through Froogle's proxy. |
-| Direct | Direct | Searches go straight from this browser to Keenable. |
-| Proxied | Direct | Proxied is not available here, so searches go straight to Keenable with your saved key. |
-| Proxied | *(no key)* | Proxied is not available here, so searching needs a Keenable API key. |
-| Direct | *(no key)* | Direct mode needs a Keenable API key before it can search. |
+```
+SEARCH MODE
+
+(o) Proxied  default
+    Queries are proxied through Froogle's servers…            <- the About bullet
+    Not available here: …                                     <- 13px --alert, when it applies
+
+( ) Direct
+    All requests go directly from your browser to Keenable…   <- the About bullet
+
+    Keenable API key   Clear        <- 13px --ink-muted label; 12px --link, only when a key is saved
+    [ keen_…                    ]   <- underlined field, 420px, write-only
+    Direct mode needs a Keenable…   <- 13px, --alert on a refusal, --ink-muted for a staged clear
+
+[ Save ]
+
+Settings saved.                          <- state line: Save's feedback, and a built-in key
+```
+
+The key field is indented to the choice bodies' 25px, inside the Direct choice rather than under a
+heading of its own: it is what that choice needs, and one paragraph explaining a key is enough for
+the page. It stays usable while Proxied is selected, because saving a key before switching is a
+reasonable order to do things in and Proxied never discards one.
+
+Both choices are always shown with their About wording. There is no line restating which one is
+selected: the radios already show it, and a sentence saying the same thing again is noise on a
+screen whose whole job is to make that choice legible. Where the chosen mode is not the one that
+will run, the two places that say so are the ones where it is actionable — Save's refusal, and the
+search error itself.
 
 Where Proxied cannot be honoured, a note in `--alert` sits under it, associated with the radio by
 `aria-describedby` so the reason reaches a screen reader that has just been told the control is
@@ -223,9 +257,39 @@ deployment, so the choice is disabled rather than offered and left to fail. `mis
 a proxy — so the radio stays usable and the stored preference is left intact, to be honoured the
 moment one answers.
 
-The key form sits below, under its own heading, and its state line reports only what key this
-browser holds. It says nothing about the mode: the line under the radios owns that, and two lines
-describing the same thing are two lines that can drift apart.
+The second state line carries Save's feedback, and one standing sentence: that this copy has a key
+built into the file, which beats anything saved in the browser. Nothing else. A key saved in *this
+browser* gets no line — the Clear button beside the field appears only when there is one to remove,
+so the form has already said it, and a sentence repeating it is a second thing to keep in step with
+the first. A built-in key has no such tell, which is why it keeps one.
+
+### Saving
+
+Save commits the mode and the key in one action, and refuses one combination: Direct with no key
+anywhere — none typed, none staying saved, none built into the file. That refusal reddens the key
+field and writes nothing at all: not the key, not the mode. A key typed into the field is still
+checked against Keenable first, and a rejected one likewise saves neither half.
+
+The refusal offers the alternative only where it exists: "Direct mode needs a Keenable API key. Add
+one, or choose Proxied." where the proxy is usable, and "…Add one to search." where it is not.
+Telling a `file://` visitor to choose Proxied would contradict the note two lines above saying
+Proxied is unavailable here — the same one-source-of-advice rule `proxyNote` and the state line
+already follow.
+
+| Save, with | Result |
+|---|---|
+| Direct, field blank, a key saved or built in | Committed. Blank is the write-only field's resting state, not an error |
+| Direct, field blank, no key anywhere | Refused on the key field. Nothing written |
+| Direct, a key typed | Checked with Keenable; committed together, or neither on a rejection |
+| Proxied, field blank | Committed. A saved key is left alone, not discarded |
+| A staged Clear, under Direct, with nothing typed | Refused, exactly as choosing Direct with no key is |
+
+Clear is staged, not immediate: it empties the field and says "This key will be removed when you
+save.", and Save applies it. One rule for the whole page — nothing changes until Save — and it
+composes, so clearing the key out from under Direct meets the same refusal rather than stranding
+the visitor in a mode that cannot search. It appears only when a key is saved, so its presence is
+itself the statement that there is one. Typing a key supersedes it: a replacement is not a
+removal, and the cue and the link both come back to say so.
 
 ### Timing
 
@@ -245,6 +309,8 @@ error, and on every view but Results.
 | Empty | "No results found for *query*." Notice styling, not error styling |
 | Error | Plain-language message per the functional spec, search box still populated |
 | Direct chosen, no key | "Direct mode needs a Keenable API key to search. Keys are free." + Settings link |
+| Save refused | The key field's label, rule and note go `--alert`: "Direct mode needs a Keenable API key", plus "Add one, or choose Proxied" where Proxied is usable and "Add one to search" where it is not. Focus moves to the field, which carries `aria-invalid` |
+| Clear staged | "This key will be removed when you save." under the field, in `--ink-muted`, and the Clear link goes |
 | Proxied chosen, no proxy | "This copy of Froogle has no proxy of its own." Then "Switch to Direct mode and add a free Keenable API key" with a Settings link, or "Search again and it will go straight to Keenable with your key" when a key is already saved |
 
 ## Accessibility
@@ -256,7 +322,13 @@ error, and on every view but Results.
 * Both search inputs have a real `<label>`, visually hidden — the wordmark beside them supplies the
   visible context. The Results view carries a visually hidden `<h1>`.
 * The mode radios are a `<fieldset>` with a visually hidden `<legend>`, and are operable with the
-  arrow keys like any radio group.
+  arrow keys like any radio group. Moving the selection commits nothing, so arrowing through them
+  with a screen reader cannot change what the page does.
+* A refused save is announced, not merely coloured: the field takes `aria-invalid`, its
+  `aria-describedby` note carries the reason, and focus moves to the field — which is what speaks
+  both. The staged-clear cue rides the same description.
+* Clear is a `<button>`, not a link, because it acts rather than navigates. Its accessible name
+  begins with its visible label.
 * Results are a `<ul>`, so screen readers announce the count.
 * The notice, the mode state line and the key state line are all `role="status" aria-live="polite"`.
 * `document.title` updates to `query — Froogle` on the results view.
