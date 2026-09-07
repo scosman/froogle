@@ -1,39 +1,61 @@
 ---
-status: draft
+status: complete
 ---
 
 # Froogle
 
-I want to make "Froogle", a free search engine using the https://docs.keenable.ai/api-reference API.
+A free search engine over the [Keenable](https://keenable.ai) web search API.
 
-## Deployment shapes
+Hybrid, because of a measured constraint in Keenable's CORS config: the **keyless** endpoint
+requires an `X-Keenable-Title` header that their own preflight forbids, so no browser can call it;
+the **keyed** endpoint has no such requirement and is browser-callable.
 
-* **Option 1: self hostable.** I want this regardless. Should be trivial to self host (docker
-  image P2), or to deploy to your own Cloudflare Workers (portable across many hosts, but
-  instructions for CF in README). I'm thinking that means Node/TS?
-* **Option 2: public instance.** I'll host one, but I expect to quickly hit the 10 requests per
-  second limit and 100k/mo if popular at all. Check how the API works. There's an unauthenticated
-  mode with request limit per IP -- can I call it from the client's browser? Would need CORS which
-  I doubt the API has. Fallback if no CORS would be backend fallback: if the authenticated version
-  fails, fall back to unauthenticated. On super distributed Cloudflare Workers, I have a lot of IPs
-  on the backend. Maybe a config flag for which to try first. My deployment might do unauth first,
-  and use the key on rate limits.
-* **API key optional:** the unauthenticated one works fine for most people self hosted.
+* **Direct mode** — with a key (baked in by a self-hoster, or saved by a visitor into
+  `localStorage`), the browser calls Keenable itself. Nothing touches a Froogle server. On the
+  hosted instance, a visitor who sets a key never calls the proxy again.
+* **Shared mode** — with no key, the browser calls Froogle's own thin proxy, which tries the
+  keyless endpoint first and falls back to the operator's key.
+
+## The repo
+
+* `index.html` — the entire frontend. Markup, CSS, and JS in one file.
+* `functions/api/search.js` — the optional proxy (Cloudflare Pages Function, same-origin).
+* `README.md`
+
+## Self hosting
+
+"Anywhere you can host an HTML file" — GitHub Pages, S3, Cloudflare Pages, Netlify, a static
+nginx, or your own Downloads folder opened over `file://`.
+
+## Config
+
+JS variables at the top of `index.html`:
+
+* `SEARCH_ENGINE_NAME` — default `"Froogle"`
+* `API_KEY` — default none
+* `PROXY_PATH` — default `"/api/search"`, a relative path, so a self-hosted copy resolves to
+  its own origin and can never reach someone else's proxy
+
+Proxy environment: `KEENABLE_API_KEY`, `UNAUTHENTICATED_FIRST` (default true).
 
 ## Design
 
-Very "old school Google". Just "Froogle" above the search box, small about at the bottom. SERP page
-is a simple list of links. All pages return as a single file, CSS in the file. No frameworks. No
-images.
+Inspired by old-school web search: a wordmark above a search box, a small about link at the bottom,
+and a SERP that is a plain list of links. **Inspired by, not a clone** — no Google colors, fonts,
+logo forms, or layout measurements. No frameworks, no build step, no dependencies, no images.
 
-## Config options
+## About page
 
-* Search engine name (default "Froogle")
-* API key (default none)
-* `unauthenticated_first` (bool, default false; if an API key is present and this is set, try
-  unauthenticated before authenticated)
+Part of the same single-page app, at `#about`. Covers roughly what the README covers, rendered for
+the web:
 
-## Open questions
+* A free single-page search engine.
+* How it works: results come from Keenable. In direct mode your browser calls them itself and your
+  query never reaches a Froogle server; in shared mode it passes through Froogle's proxy, which
+  logs and stores nothing.
+* Privacy: no cookies, no analytics, no third-party code. A saved key stays in your browser.
 
-* API options: TBD
-* SERP design: TBD
+## Routing and privacy
+
+The fragment is never sent to a server, so all generated URLs use `#` (`#q=...`, `#about`). Legacy
+`?q=` / `?about` links are accepted inbound and normalized to `#`.
