@@ -257,6 +257,8 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
     search API.
     <span data-when-shared hidden>There are two ways your search can reach them.</span>
     <span data-when-solo hidden>Here is how your search reaches them.</span>
+    <span data-when-unknown hidden>There are up to two ways your search can reach them,
+      depending on how this copy of the page is hosted.</span>
   </p>
   <ul>
     <li>
@@ -273,6 +275,13 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
     <li data-when-solo hidden>
       <strong>No shared mode.</strong> This copy of <span data-engine-name>Froogle</span> has no
       proxy of its own to fall back on, so without a key it cannot search at all.
+    </li>
+    <li data-when-unknown hidden>
+      <strong>Shared.</strong> Some copies of <span data-engine-name>Froogle</span> are deployed
+      with a thin proxy of their own, which stores nothing and logs nothing. Where there is one, a
+      query with no key passes through it on its way to Keenable; where there is not, a key is
+      required. This page cannot tell which kind of copy it is until a search without a key tries
+      &mdash; so try one, and the line at the bottom of the page will say which mode you got.
     </li>
   </ul>
   <p>
@@ -316,6 +325,13 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
     needs a Keenable key of its own before it can search anything. Searches then go straight to
     Keenable from your browser &mdash; nothing touches a
     <span data-engine-name>Froogle</span> server.
+  </p>
+  <p data-when-unknown hidden>
+    With your own key, searches go straight to Keenable from your browser &mdash; nothing touches a
+    <span data-engine-name>Froogle</span> server, and Keenable's free tier is far larger than any
+    shared allowance. Whether this copy of <span data-engine-name>Froogle</span> has a shared
+    allowance to fall back on without a key depends on how it is hosted, and it will not be known
+    until a search tries.
   </p>
   <p>
     Keys are free from
@@ -551,17 +567,19 @@ function selectMode({ key, protocol, proxyKnownBad, proxyPath } = {}) {
   return "shared";
 }
 
-/* Whether a shared-mode failure says the proxy is not there at all, as opposed to a search that
-   failed. 404 and 405 are a static host answering for a path with no function behind it, and 0 is
-   the client's marker for "no readable HTTP response", which covers both a network failure and a
-   body that will not parse as JSON — a single-page-app fallback serving index.html for the proxy
-   path answers 200 with HTML.
+/* Whether a shared-mode failure proves the proxy is not there at all, as opposed to a search that
+   failed. Only the unambiguous cases count, because the consequence lasts the whole session: 404
+   and 405 are a static host answering for a path with no function behind it, and "unreadable" is
+   one answering it with a page — a single-page-app fallback serves index.html for the proxy path
+   and returns 200 with HTML, which no proxy would ever do.
 
-   A 5xx is deliberately absent: something is there and it is broken, which is a retryable search
-   failure rather than a missing proxy, and marking it missing would strand the session on the key
-   prompt over one bad minute. So is "timeout", for the same reason. */
+   Status 0 is deliberately absent, though it used to be here. It means fetch rejected, and on a
+   same-origin path that is a dropped connection rather than a CORS block — one bad moment on a
+   phone would otherwise downgrade the entire session to "add your own key" and, worse, flip the
+   About page to "this copy has no proxy of its own", which would then be false. A 5xx and a
+   "timeout" are absent for the same reason: something is there and having a bad minute. */
 function proxyUnavailable(status) {
-  return status === 404 || status === 405 || status === 0;
+  return status === 404 || status === 405 || status === "unreadable";
 }
 
 /* URL.host is punycode for an internationalized domain, so an IDN result shows as
@@ -756,6 +774,7 @@ const el = {
   /* The two halves of the prose that only one kind of deployment can honestly print. */
   whenShared: document.querySelectorAll("[data-when-shared]"),
   whenSolo: document.querySelectorAll("[data-when-solo]"),
+  whenUnknown: document.querySelectorAll("[data-when-unknown]"),
 };
 
 /* ---- storage ------------------------------------------------------
@@ -799,8 +818,26 @@ let keyChecking = false;
    for; only the feedback is stale. */
 let keyCheckSeq = 0;
 
+/* What this page has learned about the proxy, mirrored in memory.
+
+   `proxyMissing` exists because writeStore returns false in Safari's "block all cookies", and
+   without a mirror the page would go on believing it has a shared allowance while the notice in
+   front of the visitor says it has none — exactly the disagreement keyStateText forbids. It also
+   removes the wasted request per search that a blocked store would otherwise cost.
+
+   `proxyAnswered` is the other half, and it is not persisted: it costs one keyless search to
+   re-establish, and keeping it out of storage keeps this page to the one documented session key. */
+let proxyMissing = false;
+let proxyAnswered = false;
+
 const storedKey = () => readStore(localStorage, STORAGE_KEY);
-const proxyKnownBad = () => readStore(sessionStorage, PROXY_UNAVAILABLE_KEY) === "1";
+const proxyKnownBad = () =>
+  proxyMissing || readStore(sessionStorage, PROXY_UNAVAILABLE_KEY) === "1";
+
+function markProxyMissing() {
+  proxyMissing = true;
+  writeStore(sessionStorage, PROXY_UNAVAILABLE_KEY, "1");
+}
 
 const currentKey = () => resolveKey(API_KEY, storedKey());
 
@@ -942,22 +979,33 @@ function renderFooter() {
   }
 }
 
-/* Whether a keyless visitor here would get shared mode at all. That is a property of where the
-   page is running rather than of whether a key happens to be saved right now, so it is asked with
-   the key forced absent — otherwise the About and Settings prose would rewrite itself every time
-   someone saved a key. Over file:// the answer is permanently no, and telling that visitor they
-   share an allowance with other people would simply be false. */
-function sharedAllowanceExists() {
-  return currentMode(null) === "shared";
+/* Whether a keyless visitor here would get shared mode at all — "shared", "solo", or "unknown".
+
+   It is a property of where the page is running rather than of whether a key happens to be saved
+   right now, so it is asked with the key forced absent; otherwise the About and Settings prose
+   would rewrite itself every time someone saved a key.
+
+   "unknown" is a real third answer, not a placeholder. PROXY_PATH is relative and deliberately
+   carries no host, so this page genuinely cannot tell a deployment with a Function behind it from
+   a lone index.html on a static host until something has answered there — and only a keyless
+   search ever asks. On a static host whose operator baked in an API_KEY, nobody is ever keyless,
+   so nothing ever asks and a guess would stand uncorrected for the life of the deployment. The
+   prose therefore claims a shared allowance only once one has actually answered, and claims there
+   is none only when that is structurally true: file://, no PROXY_PATH, or a probe that came back
+   proving nothing is there. */
+function deploymentSharing() {
+  if (currentMode(null) !== "shared") return "solo";
+  return proxyAnswered ? "shared" : "unknown";
 }
 
 /* Static prose that only one kind of deployment can print honestly. Toggled rather than rewritten,
-   so both wordings stay readable in the HTML, keep their markup, and keep their engine-name
+   so every wording stays readable in the HTML, keeps its markup, and keeps its engine-name
    spans. */
 function renderDeploymentProse() {
-  const shared = sharedAllowanceExists();
-  for (const node of el.whenShared) node.hidden = !shared;
-  for (const node of el.whenSolo) node.hidden = shared;
+  const sharing = deploymentSharing();
+  for (const node of el.whenShared) node.hidden = sharing !== "shared";
+  for (const node of el.whenSolo) node.hidden = sharing !== "solo";
+  for (const node of el.whenUnknown) node.hidden = sharing !== "unknown";
 }
 
 /* Derived from currentMode() rather than from storage directly, so this line cannot promise a
@@ -1060,14 +1108,24 @@ async function requestSearch(body, { mode, key, controller = new AbortController
     timedOut = true;
     controller.abort();
   }, REQUEST_TIMEOUT_MS);
+  /* Set the instant fetch resolves, which is what tells a request that never got an HTTP response
+     apart from one that got a perfectly good 200 carrying something that is not JSON. Both used to
+     be status 0, and the difference matters: the second is a static host answering the proxy path
+     with an HTML page, which is proof there is no proxy, while the first is a dropped connection,
+     which is proof of nothing. */
+  let responded = false;
   try {
     const response = await fetch(url, { ...options, signal: controller.signal });
+    responded = true;
     if (!response.ok) return { status: response.status };
     return { results: resultsFrom(await response.json()) };
   } catch {
-    /* A network drop, a CORS block, a DNS failure and a body that will not parse are all one
-       thing to fetch: no readable HTTP response. Status 0 is the app's marker for that. */
-    return { status: timedOut ? "timeout" : 0 };
+    /* A network drop, a CORS block and a DNS failure are all one thing to fetch: no readable HTTP
+       response. Status 0 is the app's marker for that, and "unreadable" for a response that
+       arrived and could not be parsed. The timeout is checked first, because an abort surfaces
+       here as a rejection whichever side of the fetch it lands on. */
+    if (timedOut) return { status: "timeout" };
+    return { status: responded ? "unreadable" : 0 };
   } finally {
     clearTimeout(timer);
   }
@@ -1140,18 +1198,15 @@ async function runSearch() {
   if (seq !== state.seq) return;
   inFlight = null;
 
-  /* The first shared-mode search doubles as the proxy probe: a copy of index.html sitting alone on
-     a static host has nothing behind PROXY_PATH, and the 404 that comes back is the only way to
-     find that out. Remembering it for the session turns "one wasted request per search" into "one
-     wasted request per session", and every later search takes the nokey branch above before any
-     request is made. The key prompt is also the useful answer here, where "Search is unavailable
-     right now" would be true but would not tell the visitor what to do about it.
-
-     Written through writeStore, so a browser blocking storage costs a request per search rather
-     than throwing. This render also flips the About and Settings prose to its solo wording, since
-     sharedAllowanceExists() has just become false. */
+  /* Every shared-mode search doubles as the proxy probe, because a relative PROXY_PATH is the only
+     thing this page knows about the proxy and nothing else ever asks. A copy of index.html sitting
+     alone on a static host has nothing behind it, and the 404 that comes back is the only way to
+     find that out. Remembering it turns "one wasted request per search" into "one per session",
+     and every later search takes the nokey branch above before any request is made. The key prompt
+     is also the useful answer here, where "Search is unavailable right now" would be true but
+     would not tell the visitor what to do about it. */
   if (mode === "shared" && proxyUnavailable(outcome.status)) {
-    writeStore(sessionStorage, PROXY_UNAVAILABLE_KEY, "1");
+    markProxyMissing();
     fail("nokey");
     return;
   }
@@ -1160,6 +1215,14 @@ async function runSearch() {
     fail(outcome.status);
     return;
   }
+
+  /* The other half of the probe, and the only proof this page ever gets that a proxy really is
+     there: a readable answer from PROXY_PATH. Until one arrives, the About and Settings prose
+     stays on its "unknown" wording rather than promising an allowance that may not exist. A
+     failure is deliberately not proof — a 500 or a 429 at that path could as easily come from a
+     static host or an edge rule as from a proxy. */
+  if (mode === "shared") proxyAnswered = true;
+
   state.results = outcome.results;
   state.status = outcome.results.length ? "ok" : "empty";
   state.error = null;

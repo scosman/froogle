@@ -30,20 +30,28 @@ const KEYED_URL = "https://api.keenable.ai/v1/search";
 const MAX_BODY_BYTES = 8192;
 const MAX_QUERY_LENGTH = 2048;
 
-/* Documented as 1-50. Whatever the caller asks for, the operator's key pays for what we send. */
-const MIN_RESULTS = 1;
-const MAX_RESULTS = 50;
+/* The one retrieval mode this proxy will ask for. Not an enum check: Keenable's other documented
+   mode, "realtime", requires an API key, so a caller who sent it would fail on the keyless tier and
+   — depending on the status that failure carries — be served on KEENABLE_API_KEY instead. That
+   would let an anonymous caller choose the tier the operator pays for, on every request. The
+   frontend only ever sends "pro", so pinning it costs nothing and closes that entirely. */
+const ALLOWED_MODE = "pro";
+
+/* Keenable's documented ranges. Whatever the caller asks for, the operator's key pays for what we
+   send, and an unclamped snippet_max_length of 10000 across 50 results is half a megabyte pulled
+   through the proxy per request. */
+const NUMBER_FIELDS = {
+  max_results: { min: 1, max: 50 },
+  snippet_max_length: { min: 180, max: 10000 },
+};
 
 const STRING_FIELDS = [
-  "mode",
   "site",
   "published_after",
   "published_before",
   "acquired_after",
   "acquired_before",
 ];
-
-const NUMBER_FIELDS = ["max_results", "snippet_max_length"];
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
@@ -110,7 +118,8 @@ async function readJsonBody(request) {
    caller every parameter Keenable ever adds, including ones that cost money.
 
    A field is copied only when it has the right type, so an object or an array cannot ride in on a
-   field that is supposed to be a string. */
+   field that is supposed to be a string; numeric fields are clamped to Keenable's documented
+   ranges; and `mode` is copied only when it is exactly the one mode this proxy will ask for. */
 export function allowlistBody(raw) {
   if (!isPlainObject(raw)) {
     return { ok: false, message: "Request body must be a JSON object." };
@@ -121,16 +130,16 @@ export function allowlistBody(raw) {
   if (query.length > MAX_QUERY_LENGTH) return { ok: false, message: "Query is too long." };
 
   const value = { query };
+  /* Dropped rather than refused, like every other field this does not recognize: a caller asking
+     for "realtime" gets a "pro" search, which is what Keenable does with an absent mode anyway. */
+  if (raw.mode === ALLOWED_MODE) value.mode = ALLOWED_MODE;
   for (const field of STRING_FIELDS) {
     if (typeof raw[field] === "string" && raw[field]) value[field] = raw[field];
   }
-  for (const field of NUMBER_FIELDS) {
+  for (const [field, range] of Object.entries(NUMBER_FIELDS)) {
     if (typeof raw[field] === "number" && Number.isFinite(raw[field])) {
-      value[field] = Math.trunc(raw[field]);
+      value[field] = clamp(Math.trunc(raw[field]), range.min, range.max);
     }
-  }
-  if (value.max_results !== undefined) {
-    value.max_results = clamp(value.max_results, MIN_RESULTS, MAX_RESULTS);
   }
   return { ok: true, value };
 }

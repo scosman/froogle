@@ -136,13 +136,34 @@ of entry rather than at the next search. Both buttons are disabled while that ch
 
 Two sentences in About and one paragraph in Settings describe a shared allowance, and a `file://`
 copy has none and never will — `selectMode` short-circuits on the protocol, so this is a permanent
-property of that deployment rather than something a later phase fixes. Both wordings are authored
-in the HTML, marked `data-when-shared` and `data-when-solo`, and the router shows one of them: the
-prose is toggled, not rewritten, so both stay readable in the source and keep their markup.
+property of that deployment rather than something a later phase fixes.
+
+There are **three** wordings, not two, because the page has three honest answers and only two of
+them are certain:
+
+| State | When | The prose says |
+|---|---|---|
+| `data-when-solo` | `file://`, no `PROXY_PATH`, or a probe proved nothing is there | There is no shared mode here; a key is required |
+| `data-when-shared` | A shared-mode request has come back readable | There are two ways your search can reach Keenable |
+| `data-when-unknown` | Everything else — an http(s) origin with a `PROXY_PATH` nothing has tried yet | There may be two ways, depending on how this copy is hosted; try a search and the footer will say |
+
+The third state is not a nicety. `PROXY_PATH` is relative and carries no host by design, so the
+page cannot tell a deployment with a Function behind it from a lone `index.html` on a static host
+until something has answered there — and only a keyless search ever asks. On a static host whose
+operator baked in an `API_KEY`, nobody is ever keyless, nothing ever asks, and a two-state guess
+would assert a shared allowance that does not exist for the life of the deployment. Asserting
+neither until one is established is the same discipline the rest of the app follows.
+
+All three wordings are authored in the HTML, marked `data-when-shared`, `data-when-solo` and
+`data-when-unknown`, and the renderer shows one: the prose is toggled, not rewritten, so all three
+stay readable in the source and keep their markup.
 
 The question asked is "would a keyless visitor here get shared mode", with the key forced absent —
 a deployment property, not a per-visitor one, so saving a key does not rewrite the page's
-explanation of itself.
+explanation of itself. Note the asymmetry with the footer mode indicator and the Settings key-state
+line, which read `shared` on an unprobed deployment: those describe what the *next search will
+attempt*, which is true and self-correcting within one request, while this prose describes the
+deployment itself, which is a durable claim.
 
 ## Components
 

@@ -44,33 +44,49 @@ operator's required step before exposing a public instance, and the README says 
 2. **Core addition** — one pure predicate, exported to the test harness:
 
    ```js
-   // Whether a shared-mode outcome says the proxy is not there at all, as opposed to a search
-   // that failed. 404 and 405 are a static host answering for a path with no function behind it;
-   // 0 is the client's marker for "no readable HTTP response", which covers a body that would not
-   // parse as JSON — an SPA fallback serving index.html for /api/search — and a network failure.
-   proxyUnavailable(status) -> boolean
+   // Whether a shared-mode outcome PROVES the proxy is not there, as opposed to a search that
+   // failed. 404 and 405 are a static host answering for a path with no function behind it, and
+   // "unreadable" is one answering it with a page — an SPA fallback serves index.html for any
+   // path and returns 200 with HTML, which no proxy would ever do.
+   proxyUnavailable(status) -> boolean   // 404, 405, "unreadable"
    ```
 
-   A 5xx is deliberately *not* on the list: something is there and it is broken, which is a
-   retryable search failure, not a missing proxy. Nor is `"timeout"`.
+   Only the unambiguous cases, because the consequence lasts the whole session. Status `0` is
+   deliberately excluded: it means `fetch` rejected, which on a same-origin path is a dropped
+   connection rather than a CORS block, so one bad moment on a phone would otherwise downgrade the
+   session *and* flip About to a claim that is then false. A 5xx and a `"timeout"` are excluded for
+   the same reason — something is there and having a bad minute.
 
-3. **Shared-mode failure handling in `runSearch`.** After the sequence check, before the generic
-   failure branch:
+   That distinction did not exist before: `requestSearch` flattened both a `fetch` rejection and an
+   unparseable body to `0`. It now sets a `responded` flag the instant `fetch` resolves and returns
+   `"unreadable"` for the second case. `errorMessage` maps it to the same generic retryable text,
+   so the split is invisible to the visitor and exists only for the probe.
+
+3. **Shared-mode probe handling in `runSearch`.** Every shared-mode search doubles as the probe,
+   because a relative `PROXY_PATH` is all this page knows and nothing else ever asks. After the
+   sequence check, before the generic failure branch:
 
    ```js
    if (mode === "shared" && proxyUnavailable(outcome.status)) {
-     writeStore(sessionStorage, PROXY_UNAVAILABLE_KEY, "1");
+     markProxyMissing();
      fail("nokey");
      return;
    }
    ```
 
-   The write is through the existing `writeStore` guard, so a browser blocking storage costs one
-   request per search instead of one per session rather than throwing. `fail("nokey")` renders the
-   actionable key prompt rather than "Search is unavailable right now", and every later search in
-   the session takes the `nokey` branch before making a request — `currentMode()` reads the flag
-   through `proxyKnownBad()`. The same render also flips the About and Settings prose to the solo
-   wording, because `sharedAllowanceExists()` is now false.
+   and, on the success path, the other half: `if (mode === "shared") proxyAnswered = true;` — a
+   readable answer from `PROXY_PATH` being the only proof this page ever gets that a proxy is
+   really there. A *failed* response is not proof of presence: a 500 or a 429 at that path could
+   come from a static host or an edge rule as easily as from a proxy.
+
+   `markProxyMissing()` sets a module-level `proxyMissing` **and** writes the session flag, and
+   `proxyKnownBad()` reads both. The mirror matters: `writeStore` returns false in Safari's "block
+   all cookies", and without it the notice would say "needs your own key" while the footer said
+   "Queries proxied through Froogle" — exactly the disagreement `keyStateText` forbids — and every
+   search would re-probe.
+
+   `fail("nokey")` renders the actionable key prompt rather than "Search is unavailable right now",
+   and every later search takes the `nokey` branch before making a request.
 
    Over `file:` none of this runs: `selectMode` short-circuits on the protocol and shared mode is
    never selected, so there is no doomed request and no console error.
@@ -99,10 +115,17 @@ operator's required step before exposing a public instance, and the README says 
    * `allowlistBody` copies only `query`, `mode`, `max_results`, `snippet_max_length`, `site`,
      `published_after`, `published_before`, `acquired_after`, `acquired_before`. Everything else is
      dropped silently. `query` must be a non-empty string under 2KB. `max_results` is clamped to
-     1–50 whatever the caller asked for. String fields are copied only when they are strings and
-     numeric fields only when they are finite numbers, so a caller cannot smuggle an object
-     through. Allowlisting rather than forwarding is the entire point: a pass-through proxy is an
-     open relay for arbitrary JSON on the operator's key.
+     1–50 and `snippet_max_length` to 180–10000 whatever the caller asked for — the operator's key
+     pays for what we send, and an unclamped 10000 across 50 results is half a megabyte per
+     request. String fields are copied only when they are strings and numeric fields only when they
+     are finite numbers, so a caller cannot smuggle an object through. Allowlisting rather than
+     forwarding is the entire point: a pass-through proxy is an open relay for arbitrary JSON on
+     the operator's key.
+   * `mode` is **pinned**, not merely type-checked: copied only when it is exactly `"pro"`, and
+     dropped otherwise. `realtime` requires an API key, so honouring it would let an anonymous
+     caller fail the keyless tier on purpose and be served on `KEENABLE_API_KEY` on every request.
+     Validating against the full enum leaves that open; pinning the one value the frontend ever
+     sends closes it and costs nothing.
    * `credentialChain` returns `[{ title }]` when `KEENABLE_API_KEY` is unset — the proxy is then
      keyless-only and a fork inherits no credit exposure — and both credentials in the order
      `UNAUTHENTICATED_FIRST` (default true) asks for when it is set.
@@ -127,7 +150,23 @@ operator's required step before exposing a public instance, and the README says 
    floor-raising the `.mjs` rule elsewhere exists to prevent. A `data:` URL is unambiguously ESM on
    every version, and it still reads the real file from disk.
 
-6. **`README.md`.** What Froogle is; the two modes and why the shape is what it is; the three
+6. **A third state for the deployment prose.** `sharedAllowanceExists()` becomes
+   `deploymentSharing() -> "shared" | "solo" | "unknown"`, and a `data-when-unknown` wording joins
+   `data-when-shared` and `data-when-solo` in About and Settings.
+
+   Two states were a guess wearing the clothes of a fact. `selectMode` returns `"shared"` for any
+   http(s) origin with a `PROXY_PATH` that has *not been probed*, and only a keyless search ever
+   probes — so on a static host whose operator baked in an `API_KEY`, nobody is ever keyless,
+   nothing ever probes, and About would assert a shared proxy that does not exist for the life of
+   the deployment. `"shared"` is now claimed only once `proxyAnswered` is true, `"solo"` only when
+   it is structurally certain (`file:`, no `PROXY_PATH`, or a probe that proved it), and
+   `"unknown"` says so plainly and points at the footer.
+
+   The footer indicator and the key-state line keep reading `shared` on an unprobed deployment,
+   deliberately: they describe what the *next search will attempt*, which is true and self-corrects
+   within one request, while this prose describes the deployment, which is a durable claim.
+
+7. **`README.md`.** What Froogle is; the two modes and why the shape is what it is; the three
    deployment shapes; the frontend config table and the proxy environment table; the plain warning
    that an `API_KEY` baked into a publicly served file is publicly readable; platform rate limiting
    as the **required** step before exposing a public instance with a key; how to run the tests; and
@@ -141,6 +180,11 @@ New tests in `test/proxy.test.mjs`:
   and a non-numeric `snippet_max_length`; rejects a missing, non-string, empty, whitespace-only, or
   over-2KB `query`; clamps `max_results` above 50, below 1, and rounds a fractional one; leaves a
   `max_results` in range alone; omits `max_results` entirely when the caller sent none.
+- `allowlistBody` — accepts `mode: "pro"` and drops every other value, `"realtime"` and casing
+  variants included; and end to end, a request asking for `"realtime"` reaches Keenable with no
+  `mode` at all.
+- `allowlistBody` — clamps `snippet_max_length` above 10000 and below 180, and omits it when the
+  caller sent none.
 - `shouldFallback` — true for 401, 402, 429, 500, 502, 503; false for 200, 400, 403, 404.
 - `credentialChain` — keyless only when `KEENABLE_API_KEY` is unset, blank, or whitespace;
   `[title, key]` under the default; `[key, title]` when `UNAUTHENTICATED_FIRST` is `"false"` (and
@@ -166,8 +210,12 @@ New tests in `test/proxy.test.mjs`:
 
 New tests in `test/core.test.mjs`:
 
-- `proxyUnavailable` — true for 404, 405 and 0; false for 200, 400, 401, 429, 500, `"timeout"`,
-  `"nokey"`, and `undefined`.
+- `proxyUnavailable` — true for 404, 405 and `"unreadable"`; false for `0`, 200, 400, 401, 402,
+  403, 429, 500, 502, 503, `"timeout"`, `"nokey"`, `undefined` and `null`.
+- `errorMessage` — `"unreadable"` reduces to exactly the generic retryable message that `0` does,
+  in both modes, and leaks nothing about parsing.
+- `keyCheckResult` — `"unreadable"` saves the key with the same unverified note that `0` gives:
+  a response we could not read disproves nothing about the key.
 
 All 75 existing tests keep passing, including the sandbox-globals diff and the
 no-DOM-dependency evaluation, which now cover one more exported function.
@@ -177,8 +225,10 @@ no-DOM-dependency evaluation, which now cover one more exported function.
 Browser-level behavior this phase makes reachable for the first time. It goes into the README, and
 the first item has never rendered in any build:
 
-* **On a hosted build with the Function deployed, the About and Settings prose shows the *shared*
-  wording.** Every Phase 2 build resolved to solo, so this branch renders for the first time here.
+* **The About and Settings prose walks all three of its states**: *unknown* on first load of a
+  hosted build, *shared* after one successful keyless search, *solo* on `file://`. The shared
+  branch renders for the first time here — every Phase 2 build resolved to solo — and the unknown
+  branch is new in this phase.
 * A keyless search on a hosted build returns results through the proxy, and the footer reads
   "Queries proxied through Froogle. Zero logs."
 * Saving a key on that same build flips the footer, the key-state line and the next search to
@@ -189,3 +239,5 @@ the first item has never rendered in any build:
   network request at all; a new tab tries once more.
 * Over `file://` a keyless search goes straight to the key prompt with no request attempted and
   nothing in the console.
+* Going offline on a working hosted build gives the generic retryable error, and the next search
+  once back online succeeds: a dropped connection must not retire shared mode or flip the prose.

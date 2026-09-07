@@ -390,22 +390,39 @@ test("selectMode returns nokey when no proxy path is configured", () => {
   );
 });
 
-test("proxyUnavailable is true only for a proxy that is not there", () => {
-  // 404 and 405 are a static host answering for a path with no function behind it; 0 is the
-  // client's marker for a network failure or a body that would not parse — an SPA fallback
-  // serving index.html for the proxy path answers 200 with HTML, which reaches us as 0.
-  for (const status of [404, 405, 0]) {
+test("proxyUnavailable is true only for a proxy that provably is not there", () => {
+  // 404 and 405 are a static host answering for a path with no function behind it. "unreadable" is
+  // one answering it with a page: an SPA fallback serves index.html for any path and returns 200
+  // with HTML, which no proxy would ever do.
+  for (const status of [404, 405, "unreadable"]) {
     assert.equal(core.proxyUnavailable(status), true, "expected true for " + status);
   }
 });
 
-test("proxyUnavailable leaves a proxy that answered badly alone", () => {
-  // A 5xx means something is there and is broken: retryable, not missing. Marking it missing would
-  // strand the whole session on the key prompt over one bad minute.
-  for (const status of [200, 400, 401, 402, 403, 429, 500, 502, 503, "timeout", "nokey",
+test("proxyUnavailable leaves an ambiguous failure alone", () => {
+  // Status 0 is fetch rejecting — on a same-origin path, a dropped connection rather than a CORS
+  // block, which proves nothing. A 5xx and a timeout mean something is there and is having a bad
+  // minute. Marking any of them missing would strand the whole session on the key prompt, and flip
+  // the About page to a claim that is then false.
+  for (const status of [0, 200, 400, 401, 402, 403, 429, 500, 502, 503, "timeout", "nokey",
                         undefined, null]) {
     assert.equal(core.proxyUnavailable(status), false, "expected false for " + String(status));
   }
+});
+
+test("errorMessage reduces an unreadable response to the generic retryable message", () => {
+  // A body that would not parse says nothing a visitor can act on, so it reads the same as a
+  // dropped connection rather than exposing that distinction, which exists for the proxy probe.
+  const generic = toHost(core.errorMessage({ status: 0, mode: "shared" }));
+  assert.deepEqual(toHost(core.errorMessage({ status: "unreadable", mode: "shared" })), generic);
+  assert.deepEqual(toHost(core.errorMessage({ status: "unreadable", mode: "direct" })), generic);
+  assert.doesNotMatch(generic.text, /unreadable|parse|JSON/i);
+});
+
+test("keyCheckResult stores a key an unreadable response could not disprove", () => {
+  assert.deepEqual(toHost(core.keyCheckResult({ status: "unreadable" })),
+    toHost(core.keyCheckResult({ status: 0 })));
+  assert.equal(core.keyCheckResult({ status: "unreadable" }).save, true);
 });
 
 test("resolveKey prefers the configured key over the stored one", () => {

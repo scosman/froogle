@@ -67,6 +67,12 @@ set — deploy the repo root as-is. Pages picks up `functions/api/search.js` on 
 at `/api/search`, same-origin with the page, which is why there is no CORS configuration, no
 preflight, and no origin allowlist anywhere in this project.
 
+A repo-root deploy publishes everything in the repo except `functions/` and files beginning with
+`_`, so `specs/`, `test/` and this README are reachable at the site URL too. That is harmless here
+— this repo is public and holds no secrets — but if you fork it and keep private notes in the tree,
+move them out of the deployed directory, or point the output directory at a folder containing only
+`index.html`.
+
 Optionally set `KEENABLE_API_KEY` in the Pages environment so the proxy can fall back to your own
 key when the keyless tier is busy. **If you are exposing this publicly, read
 [Running a public instance](#running-a-public-instance) first.**
@@ -97,6 +103,13 @@ string and cannot read the frontend's config.
 The proxy falls back **at most once**, and only on 401, 402, 429 or 5xx. A 400 is never retried: a
 malformed query fails identically on both tiers, so a retry would only burn quota. Keenable's
 status and body are returned unchanged, so error messages read the same in both modes.
+
+Requests are allowlisted rather than forwarded — an open relay for arbitrary JSON would let anyone
+spend the operator's key on anything Keenable offers. Only nine parameters are copied through, each
+type-checked; `max_results` is clamped to 1–50 and `snippet_max_length` to 180–10000; and the
+retrieval mode is pinned to `"pro"`. Keenable's other mode, `realtime`, **requires** an API key, so
+accepting it would let an anonymous caller make the keyless tier refuse every request and be served
+on `KEENABLE_API_KEY` instead. It is dropped, not honoured.
 
 With `KEENABLE_API_KEY` unset there is nothing to fall back to, so the proxy passes the upstream
 response straight through — a 429 included. A fork deployed without a key inherits no exposure to
@@ -131,8 +144,10 @@ nothing, and it is what keeps deployment down to "connect the repo". Rate limiti
 platform edge, where it works across colos and leaves the logging decision with you.
 
 On Cloudflare: **Security → WAF → Rate limiting rules**, matching on the path `/api/search`. Any
-other host has an equivalent. Pick limits that suit your budget; the proxy will pass the platform's
-rejection through as any other error.
+other host has an equivalent. Pick limits that suit your budget. The rule matches at the edge,
+*before* the Pages Function runs, so an over-limit request never reaches the proxy at all — the
+browser gets the platform's 429 directly, and Froogle shows its "shared allowance is busy" message
+with a link to add a personal key.
 
 Two other things worth doing on a public instance:
 
@@ -193,20 +208,29 @@ shipping a change to the browser layer.
 
 **Deployment and mode**
 
-- [ ] On a Cloudflare Pages build with the Function deployed, and **no key saved**, the About and
-      Settings prose shows the *shared* wording — "two ways your search can reach them", the
-      **Shared** bullet, and the Settings paragraph about a shared allowance.
-- [ ] On `file://`, the same prose shows the *solo* wording — no shared mode, no shared allowance.
-- [ ] A keyless search on the hosted build returns results through the proxy, and the footer reads
+The About and Settings prose has three states, and each renders only where it is true. Walk them
+in this order on a Cloudflare Pages build with the Function deployed:
+
+- [ ] **On first load, before any search**, the prose shows the *unknown* wording — "up to two ways
+      your search can reach them, depending on how this copy of the page is hosted". The page has
+      not yet established that a proxy is there, and must not claim one.
+- [ ] **After one successful keyless search**, it shows the *shared* wording — "two ways your
+      search can reach them", the **Shared** bullet, and the Settings paragraph about a shared
+      allowance. That search itself returns results through the proxy, and the footer reads
       "Queries proxied through Froogle. Zero logs."
-- [ ] Saving a key on that build flips the footer, the Settings key-state line and the next search
-      to direct with no reload — and the About prose keeps its shared wording, because the
-      deployment still has a shared allowance.
+- [ ] **On `file://`**, it shows the *solo* wording — no shared mode, no shared allowance — from
+      the very first render, with no search needed.
+- [ ] Saving a key *after* that successful keyless search flips the footer, the Settings key-state
+      line and the next search to direct with no reload — and the prose keeps its **shared**
+      wording, because the deployment still has a shared allowance whatever this visitor does.
 - [ ] `index.html` alone on a static host with no Function: the first keyless search costs one
       request and lands on the key prompt; every later search in that session goes straight to the
       key prompt with no network request at all; a new tab tries once more.
 - [ ] Over `file://`, a keyless search goes straight to the key prompt with no request attempted
       and nothing in the console.
+- [ ] On a working hosted build, going offline (DevTools → Network → Offline) and searching gives
+      "Search is unavailable right now" — and then, back online, the very next search works. A
+      dropped connection must **not** retire shared mode for the session or flip the prose.
 - [ ] The Settings key-state line, the footer indicator and an attempted search all agree about the
       mode, in every combination of key present/absent and `file://`/hosted.
 - [ ] Loads and searches from `file://` with a stored key.

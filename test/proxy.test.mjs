@@ -55,6 +55,10 @@ function makeRequest(body, { contentLength, throwOnRead = false } = {}) {
    this suite's floor is Node 18.0, the version that first shipped `node --test`. */
 async function withStubbedFetch(replies, body) {
   const calls = [];
+  /* A flag checked after the fact, not an assertion inside the stub: callKeenable catches
+     everything fetch can do, so an assertion thrown in here is swallowed and converted into a 502,
+     and a test that overran its replies would pass while quietly measuring the wrong thing. */
+  let overran = false;
   const original = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
     const reply = replies[calls.length];
@@ -64,12 +68,18 @@ async function withStubbedFetch(replies, body) {
       headers: options.headers,
       body: JSON.parse(options.body),
     });
-    assert.ok(reply, "upstream called more times than the test expected");
+    if (!reply) {
+      overran = true;
+      throw new Error("upstream called more times than the test expected");
+    }
     if (reply instanceof Error) throw reply;
     return new Response(reply.body ?? "{}", { status: reply.status });
   };
   try {
-    return await body(calls);
+    const result = await body(calls);
+    assert.equal(overran, false,
+      "upstream called " + calls.length + " times, but only " + replies.length + " were queued");
+    return result;
   } finally {
     globalThis.fetch = original;
   }
@@ -124,6 +134,40 @@ test("allowlistBody drops a field of the wrong type rather than forwarding it", 
     max_results: null,
   });
   assert.deepEqual(result, { ok: true, value: { query: "cats" } });
+});
+
+test("allowlistBody accepts no retrieval mode but pro", () => {
+  // realtime requires an API key, so accepting it would let an anonymous caller force every
+  // request onto the operator's key by making the keyless tier refuse it.
+  assert.equal(proxy.allowlistBody({ query: "cats", mode: "pro" }).value.mode, "pro");
+  for (const mode of ["realtime", "Pro", "PRO", "pro ", "", "fast", 1, true, null, ["pro"]]) {
+    const value = proxy.allowlistBody({ query: "cats", mode }).value;
+    assert.equal("mode" in value, false, "expected mode dropped for " + JSON.stringify(mode));
+  }
+});
+
+test("a mode the caller asked for never reaches Keenable unless it is pro", async () => {
+  const { calls } = await post({
+    body: { query: "cats", mode: "realtime" },
+    env: { KEENABLE_API_KEY: "keen_op" },
+    replies: [ok()],
+  });
+  assert.deepEqual(calls[0].body, { query: "cats" });
+});
+
+test("allowlistBody clamps snippet_max_length to Keenable's documented 180-10000", () => {
+  const at = (n) => proxy.allowlistBody({ query: "cats", snippet_max_length: n })
+    .value.snippet_max_length;
+  // Unclamped, 10000 across 50 results is half a megabyte pulled through the operator's proxy.
+  assert.equal(at(99999), 10000);
+  assert.equal(at(10001), 10000);
+  assert.equal(at(400), 400);
+  assert.equal(at(180), 180);
+  assert.equal(at(179), 180);
+  assert.equal(at(0), 180);
+  assert.equal(at(-5), 180);
+  assert.equal(at(400.7), 400);
+  assert.equal("snippet_max_length" in proxy.allowlistBody({ query: "cats" }).value, false);
 });
 
 test("allowlistBody rejects a query that is missing, empty, blank or not a string", () => {

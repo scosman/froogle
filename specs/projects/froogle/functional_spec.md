@@ -91,10 +91,16 @@ Key resolution order: `API_KEY` → `localStorage` → none (shared mode if a pr
 * Over `file://` no proxy can exist, so the app short-circuits on `location.protocol === "file:"`
   and never attempts one — no doomed request, no console error, straight to the key prompt.
 
-Anywhere else, the first failure (404, a non-JSON body, or a network error) marks the proxy
-unavailable for the rest of the session via `sessionStorage`, so a static-only deployment wastes
-one request per session rather than one per search, and every later search goes straight to the
-key prompt.
+Anywhere else, the first failure that **proves** nothing is listening — a 404, a 405, or a body
+that will not parse as JSON, which is what a static host answering the proxy path with an HTML page
+returns — marks the proxy unavailable for the rest of the session via `sessionStorage`, so a
+static-only deployment wastes one request per session rather than one per search, and every later
+search goes straight to the key prompt.
+
+A network failure is deliberately **not** one of those. It is indistinguishable from a dropped
+connection, and retiring the proxy on it would let one bad moment on a phone downgrade the whole
+session and, worse, leave the About page asserting this copy has no proxy when it does. A 5xx and a
+timeout are excluded for the same reason: something is there and is having a bad minute.
 
 ### Proxy — environment variables
 
@@ -240,9 +246,12 @@ no icons, no images of any kind.
 
 ## Proxy behavior
 
-`POST /api/search` accepts `{ query, mode, snippet_max_length, site, published_after,
-published_before, acquired_after, acquired_before }`, allowlisting those fields and rejecting
-anything else, then:
+`POST /api/search` accepts `{ query, mode, max_results, snippet_max_length, site,
+published_after, published_before, acquired_after, acquired_before }`, allowlisting those fields
+and dropping anything else. `max_results` is clamped to 1-50 and `snippet_max_length` to
+180-10000, whatever the caller asked for, and `mode` is accepted **only** as `"pro"`: `realtime`
+requires an API key, so honouring it would let an anonymous caller make the keyless tier refuse
+every request and be served on the operator's key instead. Then:
 
 1. If `UNAUTHENTICATED_FIRST`, calls `POST /v1/search/public` with
    `X-Keenable-Title: <SEARCH_ENGINE_NAME>`.

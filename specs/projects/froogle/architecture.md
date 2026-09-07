@@ -87,6 +87,10 @@ searchRequest({ mode, key, body, directUrl, proxyPath }) -> { url, options }
 resolveKey(configKey, stored)  -> string | null
 selectMode({ key, protocol, proxyKnownBad, proxyPath }) -> "direct" | "shared" | "nokey"
 
+// Whether a shared-mode failure proves there is no proxy, rather than that a search failed.
+// Only the unambiguous cases: 404, 405 and "unreadable". Not 0, not 5xx, not "timeout".
+proxyUnavailable(status) -> boolean
+
 // Result presentation. The response body is remote JSON and is treated as hostile.
 resultsFrom(payload)    -> SearchResult[]     // [] unless it is an object holding an array
 pickSnippet(result)     -> string             // snippet || description || ""
@@ -154,10 +158,25 @@ two abort causes apart exactly, rather than by sniffing an error's name. Timeout
 own `"timeout"` status and the "took too long" message; a supersede abort is discarded by the seq
 check before its status is ever read.
 
-**Proxy unavailability.** In shared mode, a response that is 404/405, or whose body is not JSON, or
-which fails at the network level, marks `sessionStorage["froogle.proxyUnavailable"] = "1"` and
-re-renders as `nokey`. Subsequent searches skip the doomed request entirely. On `file:` the probe
-never runs at all.
+**Proxy unavailability.** In shared mode, a response that is 404 or 405, or that arrives with a
+body which will not parse as JSON (status `"unreadable"` — a static host answering the proxy path
+with an HTML page), marks `sessionStorage["froogle.proxyUnavailable"] = "1"` and re-renders as
+`nokey`. Subsequent searches skip the doomed request entirely. On `file:` the probe never runs at
+all.
+
+Only those unambiguous cases count, because the consequence lasts the session. A `fetch` rejection
+(status `0`) is a dropped connection on a same-origin path and proves nothing; a 5xx and a timeout
+mean something is there and is broken. Retiring the proxy on any of them would strand a visitor on
+a flaky connection *and* flip the About page to a claim that is then false.
+
+The flag is mirrored in a module-level variable, because `writeStore` returns false in Safari's
+"block all cookies" and an unrecorded probe would leave the notice and the footer disagreeing
+about the very same question.
+
+**Proxy availability**, the other half, is a separate and *unpersisted* fact: `proxyAnswered`, set
+only when a shared-mode request comes back readable. Until then the deployment prose says it does
+not know — see below. A failed response is not proof of presence, since a 500 or a 429 at that
+path could come from a static host or an edge rule as easily as from a proxy.
 
 ### Rendering and injection safety
 
@@ -221,6 +240,7 @@ the page, so no CORS handling, no preflight, no origin allowlist.
 export async function onRequestPost({ request, env })
 
 allowlistBody(raw)          -> { ok: true, value } | { ok: false, message }
+credentialChain(env)        -> Array<{title} | {key}>   // one entry, or two in configured order
 callKeenable(body, auth)    -> Response        // auth: {key} | {title}
 shouldFallback(status)      -> boolean         // 401,402,429,5xx -> true; 400 -> false
 ```
@@ -230,8 +250,17 @@ shouldFallback(status)      -> boolean         // 401,402,429,5xx -> true; 400 -
 1. Reject non-JSON or oversized bodies (8KB cap) with 400.
 2. `allowlistBody` — copy only `query`, `mode`, `max_results`, `snippet_max_length`, `site`,
    `published_after`, `published_before`, `acquired_after`, `acquired_before`. Anything else is
-   dropped silently. `query` must be a non-empty string under 2KB; `max_results` is clamped to
-   1–50 regardless of what the client asked for.
+   dropped silently, as is any of those carrying the wrong type. `query` must be a non-empty string
+   under 2KB. `max_results` is clamped to 1–50 and `snippet_max_length` to 180–10000, whatever the
+   client asked for: the operator's key pays for what we send, and an unclamped 10000 across 50
+   results is half a megabyte per request.
+
+   `mode` is not merely type-checked but **pinned**: it is copied only when it is exactly `"pro"`,
+   and any other value is dropped. Keenable's other mode, `realtime`, requires an API key, so a
+   caller sending it would fail on the keyless tier and — if that failure carries a fallback status
+   — be served on `KEENABLE_API_KEY` instead. Validating against the full enum would leave an
+   anonymous caller able to choose the tier the operator pays for, on every request; pinning the
+   one value the frontend ever sends closes it and costs nothing.
 3. Call Keenable in the configured order. `UNAUTHENTICATED_FIRST` (default true) tries
    `/v1/search/public` with `X-Keenable-Title: <SEARCH_ENGINE_NAME>` first, then falls back to
    `/v1/search` with `KEENABLE_API_KEY`.
@@ -274,14 +303,19 @@ that catch running first. Status codes:
 | 402 | Out of credits (direct) | No, from the app's side |
 | 429 | Rate limit, either tier | Yes — wait, or add a key |
 | 5xx | Keenable or proxy | Yes — retry |
-| `0` | Network failure, CORS block, unparseable body | Yes — retry |
+| `0` | Network failure or CORS block | Yes — retry |
+| `"unreadable"` | A response arrived; its body was not JSON | Yes — retry |
 | `"timeout"` | The 15s abort fired | Yes — retry |
 | `"nokey"` | No key and no proxy | Yes — add a key |
 
-Status `0` is the app's internal marker for "no HTTP response was readable", which is what a
-`fetch` rejection gives us. The distinction matters: a CORS failure and a dropped connection are
-indistinguishable to JavaScript by design, so both get the same generic message rather than a
-guess.
+Status `0` is the app's internal marker for a `fetch` rejection — no HTTP response at all. A CORS
+failure and a dropped connection are indistinguishable to JavaScript by design, so both get the
+same generic message rather than a guess. `"unreadable"` is the neighbouring case: a response did
+arrive, and its body was not JSON.
+
+The two read identically to the visitor, and exist as separate statuses for one reason — the shared
+mode proxy probe above, where "the server answered with a web page" is proof there is no proxy and
+"the connection dropped" is proof of nothing.
 
 No stack traces or raw status codes reach the UI. The proxy logs nothing.
 
@@ -345,8 +379,10 @@ Imports `functions/api/search.js` directly — it is a plain ES module — and i
 * Fallback fires on 401, 402, 429, 5xx; does **not** fire on 400.
 * Fallback is attempted at most once.
 * No fallback when the second credential is absent.
-* `allowlistBody` drops unknown fields, rejects a missing or oversized query, clamps
-  `max_results` above 50 and below 1.
+* `allowlistBody` drops unknown fields and wrongly-typed ones, rejects a missing or oversized
+  query, clamps `max_results` above 50 and below 1 and `snippet_max_length` above 10000 and below
+  180, and drops any `mode` but `"pro"` — including `"realtime"`, end to end, so it cannot reach
+  Keenable.
 * Keenable's status and body are returned unchanged on success and on error.
 * The upstream request carries `X-Keenable-Title` on the keyless call and `X-API-Key` on the keyed
   call, and never both.
