@@ -140,11 +140,21 @@ access-control-expose-headers: Content-Type,Authorization,X-Request-Id
    header fails preflight and the request is never made. curl succeeds only because curl does not
    preflight.
 
-   This collides with the comment in Keenable's official TS SDK: *"The public tier rejects
-   requests without this header."* **BLOCKING OPEN QUESTION:** does `POST /v1/search/public`
-   actually succeed with no `X-Keenable-Title`? If yes, omit the header and the browser-only
-   architecture stands. If no, keyless-from-browser is impossible and the project needs either a
-   proxy or a key.
+   **RESOLVED, and it kills the keyless browser path.** Omitting the header returns:
+
+   ```json
+   {"error":"Missing app identifier",
+    "message":"X-Keenable-Title header is required for token-less requests"}
+   ```
+
+   Sending the identifier as a body field or a query param was also tried; both return 400. So the
+   keyless endpoint mandates a header that Keenable's own CORS preflight forbids — **no browser can
+   ever call `/v1/search/public`.** This is a defect on their side, worth reporting: the header
+   exists for attribution, and the CORS config guarantees they can never receive it from a browser.
+
+   Note the wording: *for token-less requests*. **Keyed requests do not need it**, and `X-API-Key`
+   **is** on the preflight allowlist — so `POST /v1/search` with a key works from a browser. Search
+   from the browser is therefore alive; only zero-signup search is dead.
 
 2. **`Content-Type` and `X-API-Key` are allowed**, so a JSON POST works and the keyed endpoint is
    browser-reachable. (A JSON `Content-Type` is not CORS-safelisted, so every search is
@@ -162,8 +172,16 @@ access-control-expose-headers: Content-Type,Authorization,X-Request-Id
 
 ### Still open
 
-* Does the public endpoint work without `X-Keenable-Title`? (blocking, above)
 * Does `file://` / `Origin: null` work? (gates the "Downloads folder" deployment promise)
+* Confirm with a real key that `POST /v1/search` succeeds with no `X-Keenable-Title` (inferred from
+  the error wording, not yet measured).
+
+### The MCP endpoint is not a way around this
+
+`POST https://api.keenable.ai/mcp` is keyless by design, but Streamable HTTP returns the session id
+in an `Mcp-Session-Id` response header, and that header is not in `access-control-expose-headers`,
+so browser JS cannot read it to make a follow-up call. Not a viable path, and not one to pursue
+ahead of simply reporting the CORS defect.
 
 ## Consequences of calling from the browser
 
