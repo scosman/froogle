@@ -259,7 +259,10 @@ every request and be served on the operator's key instead. Then:
    A 400 is **not** retried: a bad query fails identically on both tiers, so retrying only burns
    quota.
 3. If `UNAUTHENTICATED_FIRST` is false, the order is reversed.
-4. Returns Keenable's JSON body and status unchanged.
+4. Returns Keenable's status and body unchanged — byte-for-byte for every non-2xx status and for
+   a 2xx that parses as JSON. A 2xx whose body will not parse becomes a 502 instead, because the
+   client treats an unparseable success from the proxy path as proof no proxy is there, and a
+   working deployment must not be able to frame itself as a missing one.
 
 The retry against the key only happens when `KEENABLE_API_KEY` is set. Without one the proxy is
 keyless-only and passes the upstream response straight through, a 429 included.

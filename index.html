@@ -281,7 +281,7 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
       with a thin proxy of their own, which stores nothing and logs nothing. Where there is one, a
       query with no key passes through it on its way to Keenable; where there is not, a key is
       required. This page cannot tell which kind of copy it is until a search without a key tries
-      &mdash; so try one, and the line at the bottom of the page will say which mode you got.
+      &mdash; so try one. If this copy has no proxy, the search will say so and ask you for a key.
     </li>
   </ul>
   <p>
@@ -571,7 +571,12 @@ function selectMode({ key, protocol, proxyKnownBad, proxyPath } = {}) {
    failed. Only the unambiguous cases count, because the consequence lasts the whole session: 404
    and 405 are a static host answering for a path with no function behind it, and "unreadable" is
    one answering it with a page — a single-page-app fallback serves index.html for the proxy path
-   and returns 200 with HTML, which no proxy would ever do.
+   and returns 200 with HTML.
+
+   That last inference rests on a guarantee the proxy makes and not on an assumption about proxies
+   in general: functions/api/search.js turns a 2xx it cannot itself parse into a 502, so a
+   successful response from a real proxy is always parseable JSON. Without that, a malformed 200
+   from Keenable would make a working deployment frame itself as a missing one.
 
    Status 0 is deliberately absent, though it used to be here. It means fetch rejected, and on a
    same-origin path that is a dropped connection rather than a CORS block — one bad moment on a
@@ -1022,7 +1027,11 @@ function keyStateText() {
       : "Using a key stored in this browser.";
   }
   if (mode === "shared") {
-    return "No key set — searches use " + ENGINE_NAME + "'s shared allowance.";
+    /* "will try", not "use": until a search has actually reached the proxy this is a statement
+       about what the next one will attempt, not about what this deployment has. The deployment
+       prose a few hundred pixels above says it does not know yet, and a flat present tense here
+       would contradict it on the same screen. */
+    return "No key set — searches will try " + ENGINE_NAME + "'s shared allowance.";
   }
   return "No key set, and this copy of " + ENGINE_NAME + " has no shared allowance to fall back "
     + "on, so searching needs a key.";

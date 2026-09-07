@@ -22,7 +22,7 @@ Three phases. Each ends with a working, reviewable artifact and its tests passin
       empty, error, no-key), and settings key validation via a live search. At the end of this
       phase Froogle is fully usable from `file://` or any static host with a key.
 
-- [ ] **Phase 3: Proxy and shared mode.** `functions/api/search.js`: body allowlist, the
+- [x] **Phase 3: Proxy and shared mode.** `functions/api/search.js`: body allowlist, the
       keyless-first fallback chain, unchanged status and body pass-through. Frontend
       shared-mode path, proxy-unavailable detection cached in `sessionStorage`, and the `file:`
       short-circuit. `test/proxy.test.mjs`. README: what Froogle is, config table, the three

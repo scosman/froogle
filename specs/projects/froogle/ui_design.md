@@ -126,7 +126,7 @@ two can never disagree:
 |---|---|
 | Direct, key from `API_KEY` | "This copy of Froogle has a key built in, which takes precedence over anything saved here." |
 | Direct, key from `localStorage` | "Using a key stored in this browser." |
-| Shared | "No key set — searches use Froogle's shared allowance." |
+| Shared | "No key set — searches will try Froogle's shared allowance." |
 | No key and no proxy | "No key set, and this copy of Froogle has no shared allowance to fall back on, so searching needs a key." |
 
 Saving runs a real search to validate before storing, so a mistyped key is rejected at the moment

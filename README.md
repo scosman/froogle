@@ -102,7 +102,9 @@ string and cannot read the frontend's config.
 
 The proxy falls back **at most once**, and only on 401, 402, 429 or 5xx. A 400 is never retried: a
 malformed query fails identically on both tiers, so a retry would only burn quota. Keenable's
-status and body are returned unchanged, so error messages read the same in both modes.
+status and body are returned unchanged, so error messages read the same in both modes — with one
+exception: a 2xx whose body will not parse as JSON becomes a 502 rather than being forwarded, so a
+working proxy can never be mistaken by the page for an absent one.
 
 Requests are allowlisted rather than forwarded — an open relay for arbitrary JSON would let anyone
 spend the operator's key on anything Keenable offers. Only nine parameters are copied through, each

@@ -1,5 +1,5 @@
 ---
-status: draft
+status: complete
 ---
 
 # Phase 3: Proxy and shared mode
@@ -138,8 +138,13 @@ operator's required step before exposing a public instance, and the README says 
      never retried, because a malformed query fails identically on both tiers and a retry only
      burns quota.
    * Keenable's status and body are returned unchanged, so the client's error mapping is the same
-     in both modes. `Cache-Control: no-store` is set on the way out; nothing is logged and nothing
-     is stored.
+     in both modes — byte-for-byte for every non-2xx status and for a 2xx that parses as JSON. A
+     2xx whose body will not parse becomes a 502 instead. That is what makes the client's
+     `"unreadable"` probe sound: it reads an unparseable success from `PROXY_PATH` as proof no
+     proxy is there, so forwarding a malformed 200 from Keenable would let a working deployment
+     frame itself as a missing one. The guard is 2xx only — an error body reaches the client
+     untouched whatever it contains. `Cache-Control: no-store` is set on the way out; nothing is
+     logged and nothing is stored.
 
 5. **`test/proxy.test.mjs`.** Reads `functions/api/search.js` and imports it as a `data:` URL
    module, then injects a stub `fetch`.
@@ -164,7 +169,11 @@ operator's required step before exposing a public instance, and the README says 
 
    The footer indicator and the key-state line keep reading `shared` on an unprobed deployment,
    deliberately: they describe what the *next search will attempt*, which is true and self-corrects
-   within one request, while this prose describes the deployment, which is a durable claim.
+   within one request, while this prose describes the deployment, which is a durable claim. Both
+   are worded to say so rather than leaving the reader to infer it — the key-state line reads
+   "searches **will try** …'s shared allowance", and the unknown bullet ends by telling the visitor
+   what a search will do if there turns out to be no proxy, rather than pointing at a footer line
+   that only changes in the failure case.
 
 7. **`README.md`.** What Froogle is; the two modes and why the shape is what it is; the three
    deployment shapes; the frontend config table and the proxy environment table; the plain warning
@@ -201,7 +210,10 @@ New tests in `test/proxy.test.mjs`:
 - `onRequestPost` — no fallback when `KEENABLE_API_KEY` is absent: a keyless 429 is returned
   unchanged after exactly one upstream call.
 - `onRequestPost` — the upstream status and body are returned byte-for-byte on success and on
-  error.
+  error, whitespace included, and a 2xx parsing to a non-object still passes through.
+- `onRequestPost` — a 2xx body that will not parse (empty, whitespace, HTML, truncated JSON)
+  becomes a 502 carrying only an `error` field; a non-2xx body is passed through whether it parses
+  or not.
 - `onRequestPost` — an upstream `fetch` that throws becomes a 502 carrying no stack, and falls back
   when a second credential exists.
 - `onRequestPost` — the response carries `Cache-Control: no-store`.

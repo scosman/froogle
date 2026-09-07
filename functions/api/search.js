@@ -167,11 +167,30 @@ export function shouldFallback(status) {
    about a Response that may or may not exist. */
 async function search(body, auth) {
   const response = await callKeenable(body, auth);
+  let text;
   try {
-    return { status: response.status, body: await response.text() };
+    text = await response.text();
   } catch {
     return badGateway();
   }
+
+  /* A 2xx whose body will not parse becomes a 502 instead of being passed through. The client
+     treats "a 200 from PROXY_PATH carrying something that is not JSON" as proof that no proxy is
+     there — it is what a static host does when it serves a page for every path — and retires
+     shared mode for the session on it. Were this proxy ever to forward an empty or malformed 200
+     from Keenable, a working deployment would frame itself as a missing one, durably and wrongly.
+     Emitting only parseable JSON on success is what makes that inference sound.
+
+     Deliberately 2xx only: an error body is passed through untouched whatever it contains, so the
+     client sees exactly the status and payload Keenable produced. */
+  if (response.status >= 200 && response.status < 300) {
+    try {
+      JSON.parse(text);
+    } catch {
+      return badGateway();
+    }
+  }
+  return { status: response.status, body: text };
 }
 
 /* X-Keenable-Title on the keyless call, X-API-Key on the keyed one, never both: the title header

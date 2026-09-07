@@ -164,6 +164,10 @@ with an HTML page), marks `sessionStorage["froogle.proxyUnavailable"] = "1"` and
 `nokey`. Subsequent searches skip the doomed request entirely. On `file:` the probe never runs at
 all.
 
+The `"unreadable"` half of that rests on a guarantee the proxy makes rather than on an assumption
+about proxies in general: it turns a 2xx it cannot parse into a 502, so a successful response from
+a real proxy is always parseable JSON. See the proxy's flow, step 5.
+
 Only those unambiguous cases count, because the consequence lasts the session. A `fetch` rejection
 (status `0`) is a dropped connection on a same-origin path and proves nothing; a 5xx and a timeout
 mean something is there and is broken. Retiring the proxy on any of them would strand a visitor on
@@ -267,8 +271,17 @@ shouldFallback(status)      -> boolean         // 401,402,429,5xx -> true; 400 -
 4. Fall back **once**, only when `shouldFallback(status)` and a second credential actually exists.
    A 400 is never retried: a malformed query fails identically on both tiers, so a retry only
    burns quota.
-5. Return Keenable's status and JSON body unchanged, so the client's error mapping is identical in
-   both modes.
+5. Return Keenable's status and body unchanged, so the client's error mapping is identical in both
+   modes — byte-for-byte for every non-2xx status, and for a 2xx whose body parses as JSON. A 2xx
+   whose body will **not** parse is the one exception: it becomes a 502 instead of being forwarded.
+
+   That exception is what makes the client's `"unreadable"` inference sound. The client reads "a
+   2xx from `PROXY_PATH` carrying something that is not JSON" as proof no proxy is there — it is
+   what a static host does when it serves a page for every path — and retires shared mode for the
+   session on it. Forwarding an empty or malformed 200 from Keenable would make a working
+   deployment frame itself as a missing one, durably and wrongly. The guard is deliberately 2xx
+   only: an error body is passed through whatever it contains, so an operator debugging a broken
+   upstream sees exactly what Keenable sent.
 
 Allowlisting rather than forwarding is the point: a pass-through proxy is an open relay for
 arbitrary JSON to Keenable on the operator's key.
@@ -383,7 +396,10 @@ Imports `functions/api/search.js` directly — it is a plain ES module — and i
   query, clamps `max_results` above 50 and below 1 and `snippet_max_length` above 10000 and below
   180, and drops any `mode` but `"pro"` — including `"realtime"`, end to end, so it cannot reach
   Keenable.
-* Keenable's status and body are returned unchanged on success and on error.
+* Keenable's status and body are returned unchanged on success and on error, whitespace included,
+  and a 2xx body that parses to a non-object still passes through.
+* A 2xx body that will not parse becomes a 502; a non-2xx body is passed through whether it parses
+  or not.
 * The upstream request carries `X-Keenable-Title` on the keyless call and `X-API-Key` on the keyed
   call, and never both.
 

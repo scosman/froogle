@@ -421,11 +421,44 @@ test("with no operator key there is nothing to fall back to and a 429 passes thr
 
 /* ---- pass-through ---- */
 
-test("Keenable's status and body come back byte for byte", async () => {
-  const payload = "{\"query\":\"cats\",\"mode\":\"pro\",\"results\":[{\"title\":\"a\"}]}";
+test("a successful body comes back byte for byte, whitespace included", async () => {
+  const payload = "{\"query\":\"cats\", \"mode\":\"pro\",\n  \"results\":[{\"title\":\"a\"}]}";
   const { response, text } = await post({ replies: [{ status: 200, body: payload }] });
   assert.equal(response.status, 200);
   assert.equal(text, payload);
+});
+
+test("a 2xx that will not parse becomes a 502 rather than being passed through", async () => {
+  // The client reads "200 from PROXY_PATH carrying something that is not JSON" as proof no proxy
+  // is there and retires shared mode for the session. Forwarding a malformed 200 from Keenable
+  // would make a working deployment frame itself as a missing one, durably and wrongly. So the
+  // pass-through guarantee is byte-for-byte for *parseable* success bodies, and this is the edge.
+  for (const body of ["", "   ", "<!doctype html><p>hi", "{\"results\":", "undefined"]) {
+    const { response, text } = await post({ replies: [{ status: 200, body }] });
+    assert.equal(response.status, 502, "expected 502 for " + JSON.stringify(body));
+    assert.deepEqual(Object.keys(JSON.parse(text)), ["error"]);
+  }
+});
+
+test("a 2xx that parses to a non-object is still passed through", async () => {
+  // The guard is "parseable", not "shaped like a search response": the client's resultsFrom
+  // already treats any payload as hostile, and narrowing further here would be the proxy
+  // second-guessing Keenable's contract.
+  for (const body of ["null", "[]", "\"cats\"", "0"]) {
+    const { response, text } = await post({ replies: [{ status: 200, body }] });
+    assert.equal(response.status, 200, "expected pass-through for " + body);
+    assert.equal(text, body);
+  }
+});
+
+test("an error body is passed through whatever it contains, parseable or not", async () => {
+  // Deliberately not guarded like a 2xx: the client's error mapping reads the status, and an
+  // operator debugging a broken upstream should see exactly what Keenable sent.
+  for (const body of ["", "<html>502 Bad Gateway</html>", "{\"error\":\"nope\"}"]) {
+    const { response, text } = await post({ replies: [{ status: 503, body }] });
+    assert.equal(response.status, 503);
+    assert.equal(text, body);
+  }
 });
 
 test("an error status and body come back unchanged too", async () => {
