@@ -7,3 +7,9 @@ wrangler.jsonc
 src/
 specs/
 README.md
+
+# Local-only directories, mirroring .gitignore. They are absent from a CI deploy, which builds from
+# a fresh clone, and present in the working tree of anyone who runs `wrangler deploy` by hand —
+# where without these lines the deployment would carry local dev state onto the public site.
+.wrangler/
+.specs_skill_state/

@@ -82,9 +82,12 @@ its own.
 > `wrangler pages dev` keeps working locally, because that command emulates Pages rather than the
 > product being deployed to. `src/worker.mjs` is what replaces that routing.
 
-`.assetsignore` keeps `src/`, `specs/`, this README and the config out of the upload, so the
-deployed site is `index.html` and nothing else. Workers, unlike Pages, excludes nothing by default;
-if you fork this and keep private notes in the tree, add them to that file.
+`.assetsignore` lists what the asset upload must leave out — `src/`, `specs/`, this README, the
+config, and the local-only `.git/` and `.wrangler/` directories — so the deployed site is
+`index.html` and nothing else. Workers, unlike Pages, excludes nothing by default, and the file is
+the only thing standing between your working tree and the public site: if you fork this and keep
+private notes in the tree, add them there. `src/serve.mjs` reads the same file, so a path that 404s
+on the deployment 404s in local development too.
 
 Optionally set `KEENABLE_API_KEY` in the Worker's environment so the proxy can fall back to your own
 key when the keyless tier is busy. Add it under **Settings → Variables and Secrets** as a **Secret**,
@@ -104,9 +107,15 @@ this publicly, read [Running a public instance](#running-a-public-instance) firs
 | `API_KEY` | `""` | A Keenable key baked into the file. **See the warning below.** |
 | `PROXY_PATH` | `"/api/search"` | Same-origin path to the proxy. Relative by design. Set it to `""` to disable shared mode entirely. |
 
-If you rename the engine, change `SEARCH_ENGINE_NAME` in **both** `index.html` and
-`src/search.mjs` — the proxy sends it to Keenable as the `X-Keenable-Title` attribution
-string and cannot read the frontend's config.
+Two of these are stated twice, because a browser page and a server module cannot share a constant:
+
+* If you rename the engine, change `SEARCH_ENGINE_NAME` in **both** `index.html` and
+  `src/search.mjs` — the proxy sends it to Keenable as the `X-Keenable-Title` attribution string and
+  cannot read the frontend's config. A mismatch only misattributes; nothing breaks.
+* If you move the proxy, change `PROXY_PATH` in **both** `index.html` and `src/worker.mjs`, which is
+  what routes that path. A mismatch here *is* silent breakage — the page reads the resulting 404 as
+  proof the deployment has no proxy and shows the key prompt instead — so `node --test` asserts the
+  two agree.
 
 ### Proxy — Cloudflare environment variables
 
