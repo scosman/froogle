@@ -222,7 +222,6 @@ SEARCH MODE
 
 [ Save ]
 
-Searches go through Froogle's proxy.     <- state line: the saved mode
 A key is saved in this browser.          <- state line: the saved key, and Save's feedback
 ```
 
@@ -231,16 +230,11 @@ heading of its own: it is what that choice needs, and one paragraph explaining a
 the page. It stays usable while Proxied is selected, because saving a key before switching is a
 reasonable order to do things in and Proxied never discards one.
 
-Both choices are always shown with their About wording. Below them, one line — the only place that
-can say the chosen mode is not the one running:
-
-| Chosen | Running | Line |
-|---|---|---|
-| Proxied | Proxied | Searches go through Froogle's proxy. |
-| Direct | Direct | Searches go straight from this browser to Keenable. |
-| Proxied | Direct | Proxied is not available here, so searches go straight to Keenable with your saved key. |
-| Proxied | *(no key)* | Proxied is not available here, so searching needs a Keenable API key. |
-| Direct | *(no key)* | Direct mode needs a Keenable API key before it can search. |
+Both choices are always shown with their About wording. There is no line restating which one is
+selected: the radios already show it, and a sentence saying the same thing again is noise on a
+screen whose whole job is to make that choice legible. Where the chosen mode is not the one that
+will run, the two places that say so are the ones where it is actionable — Save's refusal, and the
+search error itself.
 
 Where Proxied cannot be honoured, a note in `--alert` sits under it, associated with the radio by
 `aria-describedby` so the reason reaches a screen reader that has just been told the control is

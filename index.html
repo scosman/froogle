@@ -943,11 +943,10 @@ function modeLabel(mode) {
 
 /* The one-line reason the Proxied choice cannot be honoured here, or null when it can.
 
-   Strictly a statement about the deployment: what is or is not behind this copy of the page.
-   What the visitor should do about it belongs to modeStateText, which is the only one of the two
-   that knows whether a key is saved — a note reading "switch to Direct and add a key" would tell
-   a visitor who has already done both to do them again, on the same screen as the line saying
-   searches are already going direct with their saved key. One source of advice, not two racing. */
+   Strictly a statement about the deployment: what is or is not behind this copy of the page. It
+   gives no advice — a note reading "switch to Direct and add a key" would tell a visitor who has
+   already done both to do them again. What to do about it surfaces where it is actionable: the
+   refusal on Save, and the search error itself. */
 function proxyNote(status, engineName) {
   const name = resolveEngineName(engineName);
   if (status === "blocked") {
@@ -960,28 +959,8 @@ function proxyNote(status, engineName) {
   return null;
 }
 
-/* What Settings says searches will actually do. When the chosen mode is the one in use this is a
-   plain restatement; when it is not, it is the only place that says which one is running instead
-   and why the choice above is still shown as chosen. */
-function modeStateText({ preference, effective, engineName } = {}) {
-  const wanted = normalizeMode(preference);
-  const name = resolveEngineName(engineName);
-  if (effective === wanted) {
-    return wanted === "proxied"
-      ? "Searches go through " + name + "'s proxy."
-      : "Searches go straight from this browser to Keenable.";
-  }
-  if (wanted === "proxied") {
-    return effective === "direct"
-      ? "Proxied is not available here, so searches go straight to Keenable with your saved key."
-      : "Proxied is not available here, so searching needs a Keenable API key.";
-  }
-  return "Direct mode needs a Keenable API key before it can search.";
-}
-
 /* The line under the Settings form: what key, if any, this browser will use. It deliberately says
-   nothing about the mode — the line under the radios above owns that — so the two cannot drift
-   into contradicting each other.
+   nothing about the mode, which the radios above already show.
 
    An empty browser says nothing at all, because the empty field above already does: the field is
    write-only, so blank is exactly "no key here". */
@@ -1321,12 +1300,11 @@ function renderModeChoice() {
   el.proxyNote.hidden = !note;
   el.proxyNote.textContent = note || "";
 
-  const explanation = modeStateText({
-    preference: modePreference(),
-    effective: currentMode(),
-    engineName: ENGINE_NAME,
-  });
-  setStatus(el.modeState, modeFeedback ? modeFeedback + " " + explanation : explanation);
+  /* Only the blocked-storage warning lands here now. The restatement that used to share this
+     line ("Searches go through Froogle's proxy") said nothing the radios above did not already
+     show, so it is gone; a warning that the choice will not survive the tab is not a
+     restatement. */
+  setStatus(el.modeState, modeFeedback);
 }
 
 const CLEAR_STAGED_NOTE = "This key will be removed when you save.";

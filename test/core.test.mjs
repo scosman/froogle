@@ -28,7 +28,7 @@ const EXPORTED = [
   "resultsFrom", "resultTitle", "pickSnippet", "normalizeSnippet", "isLinkableUrl", "displayUrl",
   "formatDate",
   "escapeXml", "errorMessage", "keyCheckResult",
-  "modeLabel", "proxyNote", "modeStateText", "keyStateText", "settingsError", "formatElapsed",
+  "modeLabel", "proxyNote", "keyStateText", "settingsError", "formatElapsed",
   "resolveEngineName", "DEFAULT_ENGINE_NAME", "DEFAULT_MODE",
 ];
 
@@ -751,7 +751,8 @@ test("proxyNote gives a reason only where Proxied cannot be honoured", () => {
 });
 
 test("proxyNote states the deployment fact and gives no advice", () => {
-  // Advice belongs to modeStateText, the only one of the two that knows whether a key is saved.
+  // The note states a deployment fact. Advice surfaces where it is actionable: the refusal on
+  // Save, and the search error itself.
   // A note telling a visitor to "switch to Direct and add a key" would otherwise appear on the
   // same screen as a line saying searches already go direct with the key they already added.
   for (const status of ["blocked", "missing"]) {
@@ -759,34 +760,6 @@ test("proxyNote states the deployment fact and gives no advice", () => {
     assert.doesNotMatch(note, /switch|add a key|instead|Settings/i,
       `the ${status} note should not advise: ${note}`);
   }
-});
-
-test("modeStateText restates the chosen mode when it is the one running", () => {
-  assert.match(core.modeStateText({ preference: "proxied", effective: "proxied" }),
-    /through Froogle's proxy/);
-  assert.match(core.modeStateText({ preference: "direct", effective: "direct" }),
-    /straight from this browser to Keenable/);
-  assert.match(core.modeStateText({ preference: "proxied", effective: "proxied",
-                                    engineName: RENAMED }),
-    new RegExp(RENAMED + "'s proxy"));
-});
-
-test("modeStateText says plainly when the chosen mode is not the one running", () => {
-  // The radio still shows what was chosen — the preference is never rewritten — so this line is
-  // the only place that can say what is happening instead.
-  assert.match(core.modeStateText({ preference: "proxied", effective: "direct" }),
-    /Proxied is not available here.*saved key/);
-  assert.match(core.modeStateText({ preference: "proxied", effective: "nokey" }),
-    /Proxied is not available here.*needs a Keenable API key/);
-  assert.match(core.modeStateText({ preference: "direct", effective: "nokey" }),
-    /Direct mode needs a Keenable API key/);
-});
-
-test("modeStateText treats an unreadable stored preference as the default", () => {
-  assert.equal(core.modeStateText({ preference: "nonsense", effective: "proxied" }),
-    core.modeStateText({ preference: "proxied", effective: "proxied" }));
-  assert.equal(core.modeStateText(), core.modeStateText({ preference: "proxied",
-    effective: undefined }));
 });
 
 test("keyStateText reports the key this browser holds, and nothing about the mode", () => {

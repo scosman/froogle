@@ -109,7 +109,6 @@ escapeXml(text) -> string
 errorMessage({ status, mode, engineName }) -> { text, action }   // action: null | "settings"
 modeLabel(mode)                           -> string             // the utility-row mode line
 proxyNote(status, engineName)             -> string | null      // why Proxied cannot be honoured
-modeStateText({ preference, effective, engineName }) -> string   // what searches actually do
 keyStateText({ builtIn, saved, engineName })         -> string   // which key this browser holds
 settingsError({ mode, typedKey, keptKey, proxyUsable }) -> string | null  // why Save refuses
 formatElapsed(ms) -> string | null        // "0.19 seconds", or null for a non-measurement
@@ -427,9 +426,9 @@ Cases:
 * `errorMessage` — every status, the mode-dependent difference at 429, the two no-search sentinels
   (`"nokey"` and `"noproxy"`, the latter differing by whether a key is there to fall back on), and
   a non-default `engineName` reaching every message that names the engine.
-* `modeLabel` / `proxyNote` / `modeStateText` / `keyStateText` — the mode line for each mode; a
-  reason only where Proxied cannot be honoured; the state line for every combination of chosen and
-  effective mode; and that the key line says nothing about the mode and nothing at all for an
+* `modeLabel` / `proxyNote` / `keyStateText` — the mode line for each mode; a
+  reason only where Proxied cannot be honoured, stating the deployment fact and giving no advice;
+  and that the key line says nothing about the mode and nothing at all for an
   empty browser.
 * `settingsError` — Direct with no key typed, kept or built in is the one refusal; a typed key, a
   kept key, and Proxied with nothing at all each commit; and the refusal offers Proxied as the way
