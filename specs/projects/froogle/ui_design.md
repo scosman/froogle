@@ -27,9 +27,9 @@ Declared once as CSS custom properties on `:root`.
 |---|---|---|
 | `--bg` | `#fcfcfa` | Page. Warm off-white, not pure white |
 | `--ink` | `#202020` | Body text, wordmark |
-| `--ink-soft` | `#5f5b54` | Dates, footer, secondary text |
+| `--ink-soft` | `#5f5b54` | Dates, footer, secondary text, input placeholder |
 | `--url` | `#2d6a4f` | The URL line under a result title |
-| `--ink-faint` | `#8a857c` | Rules, borders, placeholder |
+| `--ink-faint` | `#8a857c` | Rules and borders only |
 | `--link` | `#1a3fb0` | Unvisited result titles |
 | `--link-visited` | `#6b2fa0` | Visited result titles |
 | `--notice` | `#8a4b1f` | Error and empty-state text |
@@ -164,7 +164,8 @@ About. It updates whenever a key is saved or cleared, without a reload.
 * The notice region is `role="status" aria-live="polite"`, so state changes are announced.
 * `document.title` updates to `query — Froogle` on the results view.
 * Body text meets WCAG AA contrast against `--bg`; `--ink-faint` is used only for rules and
-  borders, never for text.
+  borders, never for text — placeholder text included, which is why it takes `--ink-soft` (6.6:1)
+  rather than `--ink-faint` (3.6:1).
 * No color is the sole carrier of meaning.
 
 ## Non-goals

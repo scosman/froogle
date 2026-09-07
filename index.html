@@ -84,7 +84,7 @@ a:visited { color: var(--link-visited); }
   color: var(--ink);
   font: 15px/1.5 var(--sans);
 }
-.search-input::placeholder { color: var(--ink-faint); }
+.search-input::placeholder { color: var(--ink-soft); }
 
 button {
   padding: 8px 16px;
@@ -146,6 +146,7 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
 
 /* ---- notice ---- */
 
+.page-message { padding-top: 24px; }
 .notice { margin: 0 0 24px; color: var(--ink-soft); }
 .notice-alert { color: var(--notice); }
 .notice a { color: inherit; }
@@ -201,7 +202,7 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
 <body>
 
 <noscript>
-  <p class="notice notice-alert" style="padding-top:24px">
+  <p class="notice notice-alert page-message">
     Froogle is a single HTML page that runs entirely in your browser, so it needs JavaScript
     enabled to search. Nothing else on this page will work without it.
   </p>
@@ -352,7 +353,10 @@ const SNIPPET_MAX_LENGTH = 400;
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/* A dotted hostname: labels of letters, digits and inner hyphens, at least one dot. */
+/* A dotted hostname: labels of letters, digits and inner hyphens, at least one dot. Deliberately
+   ASCII-only: "site:例え.com" therefore stays in the query text as search terms rather than
+   becoming a filter. Accepting Unicode here would mean punycode-encoding it before sending, and
+   Keenable's own handling of an IDN `site` value is undocumented, so the conservative rule wins. */
 const HOSTNAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i;
 
 const OPERATOR_PATTERN = /^(site|after|before):(.*)$/i;
@@ -451,6 +455,16 @@ function legacyTarget(search) {
   return null;
 }
 
+/* Where a legacy URL should be rewritten to, or null when there is nothing to rewrite. A fragment
+   that is already present wins, matching parseRoute — "?q=cats#about" is an About link that happens
+   to carry a stale query string, not a search. */
+function legacyRedirect(search, hash) {
+  const target = legacyTarget(search);
+  if (target === null) return null;
+  const fragment = String(hash ?? "").replace(/^#/, "");
+  return fragment ? "#" + fragment : target;
+}
+
 function resolveKey(configKey, stored) {
   const configured = typeof configKey === "string" ? configKey.trim() : "";
   if (configured) return configured;
@@ -468,6 +482,10 @@ function selectMode({ key, protocol, proxyKnownBad, proxyPath } = {}) {
   return "shared";
 }
 
+/* URL.host is punycode for an internationalized domain, so an IDN result shows as
+   "xn--r8jz45g.com" in both the title fallback and the URL line. Left as-is deliberately: the
+   punycode form is what the browser will actually navigate to, and decoding it would let a
+   homograph domain present itself as a familiar one. */
 function resultTitle(result) {
   const title = typeof result?.title === "string" ? result.title.trim() : "";
   if (title) return title;
@@ -514,10 +532,17 @@ function displayUrl(url) {
   return text.length > MAX_DISPLAY_URL ? text.slice(0, MAX_DISPLAY_URL - 1) + "…" : text;
 }
 
-/* UTC getters and a fixed month table, so the same timestamp renders identically everywhere. */
+const ISO_ZONE_SUFFIX = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+
+/* UTC getters and a fixed month table, so the same timestamp renders identically everywhere.
+   ECMAScript parses a date-only string as UTC but a zone-less date-time as local time, which would
+   render the same instant a day apart either side of the meridian; pinning the zone-less form to
+   UTC removes the drift. */
 function formatDate(iso) {
   if (typeof iso !== "string" || !iso.trim()) return null;
-  const parsed = Date.parse(iso);
+  const text = iso.trim();
+  const zoneless = /^\d{4}-\d{2}-\d{2}T/.test(text) && !ISO_ZONE_SUFFIX.test(text);
+  const parsed = Date.parse(zoneless ? text + "Z" : text);
   if (Number.isNaN(parsed)) return null;
   const date = new Date(parsed);
   return MONTH_NAMES[date.getUTCMonth()] + " " + date.getUTCDate() + ", " + date.getUTCFullYear();
@@ -535,6 +560,10 @@ function errorMessage({ status, mode } = {}) {
   }
   if (status === "timeout") {
     return { text: "That search took too long. Try again.", action: null };
+  }
+  /* Phase 1 ships the shell only. Phase 2 replaces runSearch and deletes this branch. */
+  if (status === "unwired") {
+    return { text: "Search is not wired up yet — this build is the interface only.", action: null };
   }
   if (status === 429) {
     return shared
@@ -595,7 +624,6 @@ const el = {
   resultsForm: document.getElementById("results-form"),
   resultsInput: document.getElementById("results-input"),
   resultsSubmit: document.getElementById("results-submit"),
-  results: document.getElementById("results"),
   notice: document.getElementById("notice"),
   modeNote: document.getElementById("mode-note"),
   keyForm: document.getElementById("key-form"),
@@ -635,6 +663,11 @@ function removeStore(store, key) {
   }
 }
 
+/* Render bookkeeping: the view we last drew, so the home input is focused on arrival rather than
+   on every render, and a settings message that survives exactly one render. */
+let previousView = null;
+let keyFeedback = "";
+
 const storedKey = () => readStore(localStorage, STORAGE_KEY);
 const proxyKnownBad = () => readStore(sessionStorage, PROXY_UNAVAILABLE_KEY) === "1";
 
@@ -653,10 +686,10 @@ function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
 
-function settingsLink() {
+function settingsLink(text) {
   const link = document.createElement("a");
   link.href = "#settings";
-  link.textContent = "Open settings";
+  link.textContent = text;
   return link;
 }
 
@@ -666,7 +699,7 @@ function fillMessage(node, { text, action }) {
   node.appendChild(document.createTextNode(text));
   if (action === "settings") {
     node.appendChild(document.createTextNode(" "));
-    node.appendChild(settingsLink());
+    node.appendChild(settingsLink("Open settings"));
   }
 }
 
@@ -689,37 +722,39 @@ function renderNotice() {
     return;
   }
   notice.className = "notice notice-alert";
-  if (state.status === "unwired") {
-    // Phase 1 ships the shell only. Phase 2 replaces runSearch and deletes this branch.
-    fillMessage(notice, {
-      text: "Search is not wired up yet — this build is the interface only.",
-      action: null,
-    });
-    return;
-  }
   fillMessage(notice, errorMessage(state.error || {}));
 }
 
+/* The mode line is the link when there is no key, rather than growing a second "Open settings"
+   next to the Settings link the footer already carries. */
 function renderFooter() {
-  fillMessage(el.modeNote, modeIndicator(currentMode()));
+  const { text, action } = modeIndicator(currentMode());
+  clear(el.modeNote);
+  if (action === "settings") {
+    el.modeNote.appendChild(settingsLink(text));
+  } else {
+    el.modeNote.appendChild(document.createTextNode(text));
+  }
+}
+
+function keyStateText() {
+  if (typeof API_KEY === "string" && API_KEY.trim()) {
+    return "This copy of " + SEARCH_ENGINE_NAME + " has a key built in, which takes precedence "
+      + "over anything saved here.";
+  }
+  return storedKey()
+    ? "Using a key stored in this browser."
+    : "No key set — searches use " + SEARCH_ENGINE_NAME + "'s shared allowance.";
 }
 
 function renderKeyState() {
-  const configured = typeof API_KEY === "string" && API_KEY.trim();
-  if (configured) {
-    el.keyState.textContent = "This copy of Froogle has a key built in, which takes precedence "
-      + "over anything saved here.";
-    return;
-  }
-  el.keyState.textContent = storedKey()
-    ? "Using a key stored in this browser."
-    : "No key set — searches use Froogle's shared allowance.";
+  el.keyState.textContent = keyFeedback ? keyFeedback + " " + keyStateText() : keyStateText();
 }
 
 function render() {
-  const previousView = document.body.dataset.view;
+  const arrivedAt = state.view !== previousView;
   for (const [name, node] of Object.entries(el.views)) node.hidden = name !== state.view;
-  document.body.dataset.view = state.view;
+  previousView = state.view;
 
   el.resultsInput.value = state.query;
   el.resultsSubmit.disabled = state.status === "searching";
@@ -731,16 +766,16 @@ function render() {
   renderFooter();
   renderKeyState();
 
-  if (state.view === "home" && state.view !== previousView) el.homeInput.focus();
+  if (arrivedAt && state.view === "home") el.homeInput.focus();
 }
 
 /* ---- search ---- */
 
 /* Phase 1 has no API client. Phase 2 replaces this whole function. */
 function runSearch() {
-  state.status = "unwired";
+  state.status = "error";
   state.results = [];
-  state.error = null;
+  state.error = { status: "unwired", mode: currentMode() };
   render();
 }
 
@@ -750,7 +785,7 @@ function runSearch() {
    history entry, and clearing `search` on a parsed URL keeps the old query string from surviving
    as a relative-fragment resolution. */
 function normalizeLegacyUrl() {
-  const target = legacyTarget(location.search);
+  const target = legacyRedirect(location.search, location.hash);
   if (target === null) return false;
   const url = new URL(location.href);
   url.search = "";
@@ -762,6 +797,7 @@ function normalizeLegacyUrl() {
 /* `resubmitted` is true when the visitor asked for a search the URL already shows, which produces
    no hashchange but should still run the search again. */
 function applyRoute({ resubmitted = false } = {}) {
+  keyFeedback = "";
   const route = parseRoute(location.hash, location.search);
   const queryChanged = route.query !== state.query;
   state.view = route.view;
@@ -798,14 +834,22 @@ function submitSearch(input) {
   navigate("results", raw);
 }
 
+function escapeXml(text) {
+  return text.replace(/[&<>"']/g, (character) => "&#" + character.charCodeAt(0) + ";");
+}
+
+/* The <link> in the document head carries the same letterform for the default name; this redraws
+   it whenever a self-hoster has renamed the engine. The ink comes from the stylesheet so the
+   colour lives in exactly one place. */
 function applyEngineName() {
   for (const node of document.querySelectorAll("[data-wordmark]")) {
     node.textContent = SEARCH_ENGINE_NAME;
   }
   const letter = SEARCH_ENGINE_NAME.trim().charAt(0) || "F";
+  const ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim();
   const svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>"
     + "<text x='16' y='25' font-family='Georgia,serif' font-size='27' text-anchor='middle'"
-    + " fill='#202020'>" + letter + "</text></svg>";
+    + " fill='" + escapeXml(ink || "#202020") + "'>" + escapeXml(letter) + "</text></svg>";
   el.favicon.href = "data:image/svg+xml," + encodeURIComponent(svg);
 }
 
@@ -828,20 +872,19 @@ function start() {
     event.preventDefault();
     const key = el.keyInput.value.trim();
     if (!key) {
-      el.keyState.textContent = "Enter a key to save, or use Clear to remove the saved one.";
-      return;
+      keyFeedback = "Enter a key to save, or use Clear to remove the saved one.";
+    } else if (!writeStore(localStorage, STORAGE_KEY, key)) {
+      keyFeedback = "This browser is blocking storage, so the key cannot be saved. Private "
+        + "browsing mode is the usual cause.";
+    } else {
+      keyFeedback = "Key saved.";
+      el.keyInput.value = "";
     }
-    if (!writeStore(localStorage, STORAGE_KEY, key)) {
-      el.keyState.textContent = "This browser is blocking storage, so the key cannot be saved. "
-        + "Private browsing mode is the usual cause.";
-      return;
-    }
-    el.keyInput.value = "";
     render();
   });
 
   el.keyClear.addEventListener("click", () => {
-    removeStore(localStorage, STORAGE_KEY);
+    keyFeedback = storedKey() && removeStore(localStorage, STORAGE_KEY) ? "Key cleared." : "";
     el.keyInput.value = "";
     render();
   });
@@ -850,7 +893,16 @@ function start() {
   applyRoute();
 }
 
-start();
+/* Every view ships hidden, so an uncaught exception here would leave a blank page with nothing to
+   read — a worse failure than the one <noscript> handles. */
+try {
+  start();
+} catch {
+  const failure = document.createElement("p");
+  failure.className = "notice notice-alert page-message";
+  failure.textContent = SEARCH_ENGINE_NAME + " could not start in this browser.";
+  document.body.appendChild(failure);
+}
 </script>
 </body>
 </html>

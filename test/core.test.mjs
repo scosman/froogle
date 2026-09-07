@@ -5,7 +5,10 @@
 // simultaneously proves the region has not grown a DOM, network or storage dependency: if it has,
 // loading throws here.
 //
-// Run with: node --test test/
+// Run with: node --test  (from the repo root; it discovers test/ on its own)
+//
+// The .mjs extension, not .js: there is no package.json to declare module type, and relying on
+// Node's module-syntax detection would silently raise the floor to Node 20.19 / 22.7.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -18,7 +21,7 @@ const INDEX_PATH = fileURLToPath(new URL("../index.html", import.meta.url));
 const EXPORTED = [
   "MAX_RESULTS", "SNIPPET_MAX_LENGTH",
   "parseQuery", "buildRequestBody",
-  "parseRoute", "formatRoute", "legacyTarget",
+  "parseRoute", "formatRoute", "legacyTarget", "legacyRedirect",
   "resolveKey", "selectMode",
   "resultTitle", "pickSnippet", "normalizeSnippet", "isLinkableUrl", "displayUrl", "formatDate",
   "errorMessage", "modeIndicator",
@@ -51,23 +54,28 @@ const core = loadCore();
    and deepStrictEqual rejects them on identity alone. This copies a plain result across the
    boundary without loosening the comparison — null and undefined stay distinct. */
 function toHost(value) {
-  if (Array.isArray(value)) return value.map(toHost);
+  // Array.from rather than value.map: map on a vm array builds another vm array.
+  if (Array.isArray(value)) return Array.from(value, toHost);
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, toHost(v)]));
   }
   return value;
 }
 
+test("the core's sandbox holds nothing but the language, URL and URLSearchParams", () => {
+  const listGlobals = (context) =>
+    vm.runInContext("Object.getOwnPropertyNames(globalThis)", context);
+  const languageOnly = new Set(listGlobals(vm.createContext({})));
+  const seeded = listGlobals(createSandbox()).filter((name) => !languageOnly.has(name));
+  assert.deepEqual(toHost(seeded).sort(), ["URL", "URLSearchParams"]);
+  // console is seeded as undefined, so a stray log in the core throws instead of quietly working.
+  // A blanked global is not reported as an own name, hence the separate check.
+  assert.equal(vm.runInContext("typeof console", createSandbox()), "undefined");
+});
+
 test("core region carries no DOM, network or storage dependency", () => {
-  const context = createSandbox();
-  const absent = ["document", "window", "fetch", "localStorage", "sessionStorage", "location",
-                  "navigator", "XMLHttpRequest", "console"];
-  for (const name of absent) {
-    assert.equal(
-      vm.runInContext(`typeof ${name}`, context), "undefined",
-      `${name} must not exist in the core's sandbox`,
-    );
-  }
+  // Loading is the assertion: document, fetch, localStorage and friends are absent from the
+  // sandbox above, so any reference the core grew to one of them throws here.
   assert.doesNotThrow(loadCore);
 });
 
@@ -221,6 +229,9 @@ test("parseRoute falls back to a legacy query string only when the fragment says
   assert.deepEqual(toHost(core.parseRoute("", "?about")), { view: "about", query: "" });
   assert.deepEqual(toHost(core.parseRoute("#q=dogs", "?q=cats")),
     { view: "results", query: "dogs" });
+  assert.deepEqual(toHost(core.parseRoute("#about", "?q=cats")), { view: "about", query: "" });
+  assert.deepEqual(toHost(core.parseRoute("#settings", "?about")),
+    { view: "settings", query: "" });
 });
 
 test("legacyTarget maps legacy links onto fragments", () => {
@@ -240,6 +251,26 @@ test("legacyTarget returns null when there is nothing to rewrite", () => {
   for (const search of ["", "?", "?utm_source=x", "?settings", undefined, null]) {
     assert.equal(core.legacyTarget(search), null, `expected null for ${JSON.stringify(search)}`);
   }
+});
+
+test("legacyRedirect follows the legacy query string when there is no fragment", () => {
+  assert.equal(core.legacyRedirect("?q=cats", ""), "#q=cats");
+  assert.equal(core.legacyRedirect("?about", ""), "#about");
+  assert.equal(core.legacyRedirect("?q=cats", "#"), "#q=cats");
+  assert.equal(core.legacyRedirect("?q=", ""), "");
+});
+
+test("legacyRedirect keeps an existing fragment, which outranks the query string", () => {
+  assert.equal(core.legacyRedirect("?q=cats", "#about"), "#about");
+  assert.equal(core.legacyRedirect("?q=cats", "#q=dogs"), "#q=dogs");
+  assert.equal(core.legacyRedirect("?about", "#settings"), "#settings");
+  assert.equal(core.legacyRedirect("?q=cats", "settings"), "#settings");
+});
+
+test("legacyRedirect leaves a URL with no legacy parameter alone", () => {
+  assert.equal(core.legacyRedirect("", "#about"), null);
+  assert.equal(core.legacyRedirect("?utm_source=x", "#about"), null);
+  assert.equal(core.legacyRedirect(undefined, undefined), null);
 });
 
 /* ---- mode selection ---- */
@@ -377,6 +408,19 @@ test("formatDate renders a plain date without timezone drift", () => {
   assert.equal(core.formatDate("2026-01-08"), "Jan 8, 2026");
   assert.equal(core.formatDate("2026-12-31"), "Dec 31, 2026");
   assert.equal(core.formatDate("2026-01-08T14:03:00Z"), "Jan 8, 2026");
+  assert.equal(core.formatDate("  2026-01-08  "), "Jan 8, 2026");
+});
+
+test("formatDate reads a zone-less timestamp as UTC, not local time", () => {
+  // Parsed as local time these land on Jan 7 west of the meridian and Jan 9 east of it.
+  assert.equal(core.formatDate("2026-01-08T00:30:00"), "Jan 8, 2026");
+  assert.equal(core.formatDate("2026-01-08T23:30:00"), "Jan 8, 2026");
+  assert.equal(core.formatDate("2026-01-08T23:30:00.500"), "Jan 8, 2026");
+});
+
+test("formatDate honours an explicit offset", () => {
+  assert.equal(core.formatDate("2026-01-08T23:30:00-05:00"), "Jan 9, 2026");
+  assert.equal(core.formatDate("2026-01-08T00:30:00+05:00"), "Jan 7, 2026");
 });
 
 test("formatDate returns null for absent or unparseable input", () => {
@@ -427,6 +471,12 @@ test("errorMessage gives one generic message for 5xx and network failure", () =>
   }
 });
 
+test("errorMessage carries the phase-1 placeholder for an unwired search", () => {
+  // Phase 2 deletes this along with the branch it covers.
+  assert.match(messageFor("unwired", "direct").text, /not wired up yet/);
+  assert.equal(messageFor("unwired", "shared").action, null);
+});
+
 test("errorMessage handles the timeout and no-key sentinels", () => {
   assert.match(messageFor("timeout", "direct").text, /too long/);
   assert.equal(messageFor("timeout", "direct").action, null);
@@ -435,7 +485,8 @@ test("errorMessage handles the timeout and no-key sentinels", () => {
 });
 
 test("errorMessage never leaks a raw status code or an empty message", () => {
-  const statuses = [0, 400, 401, 402, 403, 404, 429, 500, 503, "timeout", "nokey", undefined];
+  const statuses = [0, 400, 401, 402, 403, 404, 429, 500, 503,
+                    "timeout", "nokey", "unwired", undefined];
   for (const status of statuses) {
     for (const mode of ["direct", "shared", "nokey"]) {
       const { text, action } = messageFor(status, mode);
