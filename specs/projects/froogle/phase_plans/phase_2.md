@@ -20,6 +20,14 @@ Phase 3 owns the proxy and the shared-mode request. Two consequences for this ph
   Phase 3 deletes that line, and nothing else: every one of those four is derived from
   `currentMode()`, so the deletion is a single coordinated edit. This mirrors how Phase 1 handled
   the unwired search: one marked branch, deleted by the phase that makes it false.
+
+  A fifth surface joins them and does *not* go away in Phase 3: the static About and Settings
+  prose that describes a shared allowance. Over `file://` there has never been one and never will
+  be — `selectMode` short-circuits on the protocol — so that is a permanent property of the
+  deployment rather than a phase artifact. Both wordings are authored in the HTML, marked
+  `data-when-shared` / `data-when-solo`, and `renderDeploymentProse` shows one. The question it
+  asks is `currentMode(null) === "shared"`: what a *keyless* visitor here would get, so saving a
+  key does not rewrite the page's explanation of itself.
 * `searchRequest` — the pure function that turns a mode plus a key into a URL and headers —
   is written whole, covering the proxy target as well as the direct one. It is request
   *construction*, not the shared-mode path: splitting "which credential goes to which host" across
@@ -117,10 +125,16 @@ What is left above the core marker is wiring — a `fetch` call, a timer, and `c
 
    Two accessibility details the visual design does not imply. `#notice` is the `aria-live`
    region, and hiding it on success would follow "Searching…" with silence, so success puts the
-   result count in it under `visually-hidden` instead — spoken, never seen. And when a search
-   starts, focus moves to the results search box if it was on either Search button, since the one
-   is about to be disabled and the other hidden, and a browser drops focus to `<body>` with
-   nothing to restore it up to 15s later.
+   result count in it under `visually-hidden` instead — spoken, never seen. And on the first
+   render of any search — the two early failures included, since in a keyless Phase 2 build the
+   no-key failure *is* the common path — focus moves to the results search box if it was on either
+   Search button, since the one is about to be disabled and the other hidden, and a browser drops
+   focus to `<body>` with nothing to restore it up to 15s later.
+
+   That test is `:focus-visible`, not `=== document.activeElement`: a tap on Android leaves focus
+   on the button too, and re-focusing the box there would pop the on-screen keyboard back up over
+   the results. `matches()` throws on a pseudo-class it does not know, so it is guarded and an old
+   browser goes without the restore rather than without search.
 
 7. **Settings key validation.** Save runs a real minimal search with the pasted key before
    storing it, disabling Save while it runs and reporting the outcome through `keyCheckResult`.

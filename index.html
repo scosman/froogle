@@ -254,7 +254,9 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
   <h2>How it works</h2>
   <p>
     Results come from <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>, a web
-    search API. There are two ways your search can reach them.
+    search API.
+    <span data-when-shared hidden>There are two ways your search can reach them.</span>
+    <span data-when-solo hidden>Here is how your search reaches them.</span>
   </p>
   <ul>
     <li>
@@ -263,10 +265,14 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
       browser calls Keenable itself. Your query never reaches a
       <span data-engine-name>Froogle</span> server.
     </li>
-    <li>
+    <li data-when-shared hidden>
       <strong>Shared.</strong> With no key, your query passes through
       <span data-engine-name>Froogle</span>'s own thin proxy,
       which stores nothing and logs nothing, and forwards the search to Keenable.
+    </li>
+    <li data-when-solo hidden>
+      <strong>No shared mode.</strong> This copy of <span data-engine-name>Froogle</span> has no
+      proxy of its own to fall back on, so without a key it cannot search at all.
     </li>
   </ul>
   <p>
@@ -299,11 +305,17 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
   <h1 class="wordmark" data-wordmark>Froogle</h1>
 
   <h2>Your own Keenable key</h2>
-  <p>
+  <p data-when-shared hidden>
     Without a key, searches share one allowance with everyone else using this page. With your own
     key they go straight to Keenable from your browser &mdash; nothing touches a
     <span data-engine-name>Froogle</span> server,
     and Keenable's free tier is far larger than the shared allowance.
+  </p>
+  <p data-when-solo hidden>
+    This copy of <span data-engine-name>Froogle</span> has no shared allowance behind it, so it
+    needs a Keenable key of its own before it can search anything. Searches then go straight to
+    Keenable from your browser &mdash; nothing touches a
+    <span data-engine-name>Froogle</span> server.
   </p>
   <p>
     Keys are free from
@@ -728,6 +740,9 @@ const el = {
   keyClear: document.getElementById("key-clear"),
   keyState: document.getElementById("key-state"),
   favicon: document.getElementById("favicon"),
+  /* The two halves of the prose that only one kind of deployment can honestly print. */
+  whenShared: document.querySelectorAll("[data-when-shared]"),
+  whenSolo: document.querySelectorAll("[data-when-solo]"),
 };
 
 /* ---- storage ------------------------------------------------------
@@ -913,6 +928,24 @@ function renderFooter() {
   }
 }
 
+/* Whether a keyless visitor here would get shared mode at all. That is a property of where the
+   page is running rather than of whether a key happens to be saved right now, so it is asked with
+   the key forced absent — otherwise the About and Settings prose would rewrite itself every time
+   someone saved a key. Over file:// the answer is permanently no, and telling that visitor they
+   share an allowance with other people would simply be false. */
+function sharedAllowanceExists() {
+  return currentMode(null) === "shared";
+}
+
+/* Static prose that only one kind of deployment can print honestly. Toggled rather than rewritten,
+   so both wordings stay readable in the HTML, keep their markup, and keep their engine-name
+   spans. */
+function renderDeploymentProse() {
+  const shared = sharedAllowanceExists();
+  for (const node of el.whenShared) node.hidden = !shared;
+  for (const node of el.whenSolo) node.hidden = shared;
+}
+
 /* Derived from currentMode() rather than from storage directly, so this line cannot promise a
    shared allowance while the footer just below it — and the search path — say there is no way to
    search at all. It reports whatever the mode actually is, which keeps it correct on
@@ -955,12 +988,27 @@ function render() {
   renderNotice();
   renderResults();
   renderFooter();
+  renderDeploymentProse();
   renderKeyState();
 
   if (arrivedAt && state.view === "home") el.homeInput.focus();
 }
 
 /* ---- search ---- */
+
+/* Whether a button holds focus *and* the browser thinks that focus deserves to be seen — which is
+   what "arrived here by keyboard" amounts to. Plain `=== document.activeElement` would be true
+   after a tap as well, and re-focusing the search box there would pop the on-screen keyboard the
+   tap just dismissed back up over the results. Support for the selector arrived in Safari 15.4
+   and Firefox 85, and matches() throws on a pseudo-class it does not know, so a browser older
+   than that goes without the focus restore rather than without search. */
+function keyboardFocusIsOn(node) {
+  try {
+    return node.matches(":focus-visible");
+  } catch {
+    return false;
+  }
+}
 
 const KEENABLE_SEARCH_URL = "https://api.keenable.ai/v1/search";
 const REQUEST_TIMEOUT_MS = 15000;
@@ -973,8 +1021,13 @@ const KEY_CHECK_BODY = { query: "test", mode: "pro", max_results: 1, snippet_max
 /* The controller for the request currently in flight, so a new search can abort the old one. */
 let inFlight = null;
 
-/* One request, one timeout, one place where any failure becomes a `{ status }` pair. Nothing
-   throws out of here, so the render path never has to handle an exception.
+/* One request, one timeout, one place where a *request* failure becomes a `{ status }` pair — the
+   render path never has to reason about a network exception.
+
+   The one thing that does throw out of here is searchRequest rejecting a mode it does not know,
+   deliberately: that is a programming error rather than a failed search, it happens before the
+   try block, and it reaches the console through startSearch's catch instead of being flattened
+   into "Search is unavailable right now."
 
    A single AbortController serves both the timeout and the supersede abort, rather than composing
    AbortSignal.timeout with a second signal: AbortSignal.any is newer than either, and one
@@ -1021,11 +1074,28 @@ async function runSearch() {
   cancelSearch();
   const seq = state.seq;
 
+  /* Captured before the first render of this search, which is what disables the results submit
+     button and hides the home view. A browser drops focus to <body> when the element holding it
+     goes away, and puts it nowhere when the button comes back up to 15s later, so it is moved to
+     the search box — which stays populated for editing, and is the better place for it anyway.
+     Every path below renders, the two early failures included, so this has to be read before any
+     of them. */
+  let restoreFocus = keyboardFocusIsOn(el.resultsSubmit) || keyboardFocusIsOn(el.homeSubmit);
+
+  /* The one render of this search that moves focus is whichever comes first. */
+  const show = () => {
+    render();
+    if (restoreFocus) {
+      restoreFocus = false;
+      el.resultsInput.focus();
+    }
+  };
+
   const fail = (status) => {
     state.status = "error";
     state.results = [];
     state.error = { status, mode };
-    render();
+    show();
   };
 
   if (mode === "nokey") {
@@ -1042,18 +1112,10 @@ async function runSearch() {
     return;
   }
 
-  /* The submit button is about to be disabled, and the home view about to be hidden. A browser
-     drops focus to <body> when the element holding it goes away and puts it nowhere when the
-     button comes back up to 15s later, so it is moved to the search box — which stays populated
-     for editing, and is the better place for it regardless. */
-  const strandedFocus = document.activeElement === el.resultsSubmit
-    || document.activeElement === el.homeSubmit;
-
   state.status = "searching";
   state.results = [];
   state.error = null;
-  render();
-  if (strandedFocus) el.resultsInput.focus();
+  show();
 
   const controller = new AbortController();
   inFlight = controller;
@@ -1071,13 +1133,14 @@ async function runSearch() {
   state.results = outcome.results;
   state.status = outcome.results.length ? "ok" : "empty";
   state.error = null;
-  render();
+  show();
 }
 
-/* runSearch cannot reject through requestSearch, which catches everything — but a bug anywhere
-   after its await would otherwise be a silent unhandled rejection that leaves the page stuck on
-   "Searching…" with the submit button disabled and no way back but a reload. The generic error is
-   both true and recoverable; the console keeps the detail. */
+/* The only search entry point, because runSearch can reject two ways and neither may be silent:
+   searchRequest throws on a mode it does not recognize, and a bug anywhere after the await —
+   in render(), say — would otherwise leave the page stuck on "Searching…" with the submit button
+   disabled and no way back but a reload. The generic error is both true and recoverable; the
+   console keeps the detail. */
 function startSearch() {
   runSearch().catch((error) => {
     console.error(error);

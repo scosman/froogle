@@ -112,14 +112,37 @@ The search box stays populated with the current query so it can be edited in pla
 Prose in the same column: what Froogle is, how it works, privacy. Headings at 15px bold, body at
 15px, generous paragraph spacing. Ends with links to the source repo and to Keenable.
 
+The "how it works" list describes shared mode only where shared mode can actually happen — see
+**Deployment-conditional prose** below.
+
 ### Settings
 
-Explains the two modes, then a single labelled `<input type="password">` for a Keenable key, with
-Save and Clear buttons and a link to Keenable's console. Below it, the current state in one line:
-"Using a key stored in this browser" or "No key set — searches use Froogle's shared allowance."
+Explains the modes this deployment has, then a single labelled `<input type="password">` for a
+Keenable key, with Save and Clear buttons and a link to Keenable's console. Below it, the current
+state in one line, which is derived from the same mode calculation as the footer indicator so the
+two can never disagree:
+
+| Condition | Line |
+|---|---|
+| Direct, key from `API_KEY` | "This copy of Froogle has a key built in, which takes precedence over anything saved here." |
+| Direct, key from `localStorage` | "Using a key stored in this browser." |
+| Shared | "No key set — searches use Froogle's shared allowance." |
+| No key and no proxy | "No key set, and this copy of Froogle has no shared allowance to fall back on, so searching needs a key." |
 
 Saving runs a real search to validate before storing, so a mistyped key is rejected at the moment
-of entry rather than at the next search.
+of entry rather than at the next search. Both buttons are disabled while that check runs.
+
+### Deployment-conditional prose
+
+Two sentences in About and one paragraph in Settings describe a shared allowance, and a `file://`
+copy has none and never will — `selectMode` short-circuits on the protocol, so this is a permanent
+property of that deployment rather than something a later phase fixes. Both wordings are authored
+in the HTML, marked `data-when-shared` and `data-when-solo`, and the router shows one of them: the
+prose is toggled, not rewritten, so both stay readable in the source and keep their markup.
+
+The question asked is "would a keyless visitor here get shared mode", with the key forced absent —
+a deployment property, not a per-visitor one, so saving a key does not rewrite the page's
+explanation of itself.
 
 ## Components
 

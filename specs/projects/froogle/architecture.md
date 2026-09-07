@@ -256,7 +256,16 @@ of it — a Cloudflare Rate Limiting rule, or the equivalent on another host.
 ## Error handling strategy
 
 Errors never propagate as exceptions to the UI. The search path catches everything and reduces it
-to `{ status, mode }`, which `errorMessage` maps to display text. Status codes:
+to `{ status, mode }`, which `errorMessage` maps to display text.
+
+"Everything" takes two catches, not one. The request itself is reduced inside `requestSearch`. Two
+things escape that: `searchRequest` refusing an unrecognized mode, which throws before the try
+block on purpose, and a bug anywhere after the `await` — in `render()`, say. Both are caught at the
+call site, which is why the async entry points (`startSearch`, and the Settings save handler) are
+invoked through a `.catch()` rather than `void`. Without it either one is a silent unhandled
+rejection that leaves the page stuck on "Searching…", or Save and Clear disabled, until a reload.
+`saveKey` additionally re-enables its buttons from a `finally`, so the recovery does not depend on
+that catch running first. Status codes:
 
 | Status | Source | Recoverable |
 |---|---|---|
