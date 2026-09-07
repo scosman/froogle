@@ -145,7 +145,7 @@ them are certain:
 |---|---|---|
 | `data-when-solo` | `file://`, no `PROXY_PATH`, or a probe proved nothing is there | There is no shared mode here; a key is required |
 | `data-when-shared` | A shared-mode request has come back readable | There are two ways your search can reach Keenable |
-| `data-when-unknown` | Everything else — an http(s) origin with a `PROXY_PATH` nothing has tried yet | There may be two ways, depending on how this copy is hosted; try a search and the footer will say |
+| `data-when-unknown` | Everything else — an http(s) origin with a `PROXY_PATH` nothing has tried yet | There may be two ways, depending on how this copy is hosted; try a search, and if there is no proxy the search itself will say so and ask for a key |
 
 The third state is not a nicety. `PROXY_PATH` is relative and carries no host by design, so the
 page cannot tell a deployment with a Function behind it from a lone `index.html` on a static host

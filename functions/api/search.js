@@ -75,8 +75,9 @@ export async function onRequestPost({ request, env }) {
     if (!shouldFallback(outcome.status)) break;
   }
 
-  /* Keenable's status and body, unchanged, so the client's error mapping is identical in direct
-     and shared mode and this proxy never invents a failure of its own. */
+  /* Keenable's status and body, unchanged — except a 2xx whose body will not parse, which `search`
+     has already turned into a 502. Every other status and body reaches the client exactly as
+     Keenable sent it, so the client's error mapping is identical in direct and shared mode. */
   return new Response(outcome.body, { status: outcome.status, headers: JSON_HEADERS });
 }
 
