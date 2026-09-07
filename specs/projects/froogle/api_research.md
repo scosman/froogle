@@ -107,28 +107,63 @@ and both should fall back to keyless.
 * **Keyed:** pricing page states 100,000 free requests/month then pay-as-you-go. The 10 req/s
   figure is from the project owner and is not in any published artifact we could reach.
 
-## CORS — VERIFIED OPEN
+## CORS — measured, and it constrains the design
 
-The project owner tested this directly: CORS on `api.keenable.ai` is wide open. The browser can
-call `POST /v1/search/public` from any origin, which is what makes the no-backend design possible.
+Both directions were tested with curl against `POST /v1/search/public`.
 
-Two follow-ups worth confirming, because they are the cases that could still bite:
+**Actual response** (with `Origin: https://evil.example`):
 
-1. **The preflight must allow `X-Keenable-Title`.** Search is a JSON `POST`, so it is always
-   preflighted, and the public tier rejects requests that omit that header. If the CORS test was
-   run without it, the header may still be missing from `Access-Control-Allow-Headers`.
-2. **`file://` sends `Origin: null`.** The README promises "your Downloads folder" as a valid
-   deployment, so the `null` origin needs to work. It will if the API returns
-   `Access-Control-Allow-Origin: *`; it may not if the API echoes the request origin back.
-
-```js
-// Paste into the devtools console of any page to check both at once.
-await fetch("https://api.keenable.ai/v1/search/public", {
-  method: "POST",
-  headers: { "Content-Type": "application/json", "X-Keenable-Title": "Froogle" },
-  body: JSON.stringify({ query: "old school search engines" }),
-}).then(r => r.json());
 ```
+access-control-allow-origin: https://evil.example      <- echoes the origin, not "*"
+vary: Origin
+access-control-allow-credentials: true
+access-control-expose-headers: X-Request-Id, Server-Timing
+x-ratelimit-limit: 1000
+x-ratelimit-remaining: 997
+x-ratelimit-reset: 2026-09-07T17:13:25.008Z
+```
+
+**Preflight response** (`OPTIONS`, requesting `content-type,x-keenable-title`):
+
+```
+HTTP/2 204
+access-control-allow-methods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+access-control-allow-headers: Content-Type,Authorization,X-API-Key,baggage,sentry-trace,
+                              traceparent,tracestate,Accept,Accept-Language,Content-Language
+access-control-expose-headers: Content-Type,Authorization,X-Request-Id
+```
+
+### Consequences
+
+1. **`X-Keenable-Title` is NOT allowed by the preflight.** The allow-headers list is static — it
+   ignores `Access-Control-Request-Headers` rather than reflecting it. A browser that sends the
+   header fails preflight and the request is never made. curl succeeds only because curl does not
+   preflight.
+
+   This collides with the comment in Keenable's official TS SDK: *"The public tier rejects
+   requests without this header."* **BLOCKING OPEN QUESTION:** does `POST /v1/search/public`
+   actually succeed with no `X-Keenable-Title`? If yes, omit the header and the browser-only
+   architecture stands. If no, keyless-from-browser is impossible and the project needs either a
+   proxy or a key.
+
+2. **`Content-Type` and `X-API-Key` are allowed**, so a JSON POST works and the keyed endpoint is
+   browser-reachable. (A JSON `Content-Type` is not CORS-safelisted, so every search is
+   preflighted; that preflight passes.)
+
+3. **Rate-limit headers are invisible to JS.** `X-RateLimit-Limit/Remaining/Reset` are sent but
+   absent from `access-control-expose-headers`, so `fetch()` cannot read them cross-origin. No
+   quota indicator is possible; the app only learns of the limit when a 429 arrives.
+
+4. **Origin is echoed, not `*`,** and `access-control-allow-credentials: true`. Never send
+   `credentials: "include"` — there is no reason to attach cookies to a search. It also leaves
+   `file://` (`Origin: null`) unverified: it works only if the server echoes the literal `null`.
+
+5. Confirms the keyless limit is **1,000/hour**, with an absolute ISO reset timestamp.
+
+### Still open
+
+* Does the public endpoint work without `X-Keenable-Title`? (blocking, above)
+* Does `file://` / `Origin: null` work? (gates the "Downloads folder" deployment promise)
 
 ## Consequences of calling from the browser
 
@@ -138,3 +173,12 @@ await fetch("https://api.keenable.ai/v1/search/public", {
   is therefore only meaningful for a private deployment (`file://`, an intranet, a password-gated
   host). This must be stated plainly in the README next to the config block.
 * **No server-side caching is possible.** Any caching is per-browser.
+
+## Result count: not requestable
+
+There is no `limit`, `count`, `top_k`, `num_results`, `offset`, `page`, or cursor in the OpenAPI
+schema or either official SDK, and the response carries no total or next-page token. The Haystack
+integration's `top_k` is documented as *"applied client-side"*, confirming integrations trim rather
+than request. Undocumented params demonstrably exist (`snippet_max_length` is sent by both SDKs and
+absent from the schema), so a probe for an undocumented count param is worth one pass; absent a
+hit, the app renders every result the API returns.
