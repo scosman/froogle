@@ -33,7 +33,8 @@ JS variables at the top of `index.html`:
 
 * `SEARCH_ENGINE_NAME` — default `"Froogle"`
 * `API_KEY` — default none
-* `PROXY_URL` — default empty, so a self-hosted copy never points at someone else's proxy
+* `PROXY_PATH` — default `"/api/search"`, a relative path, so a self-hosted copy resolves to
+  its own origin and can never reach someone else's proxy
 
 Proxy environment: `KEENABLE_API_KEY`, `UNAUTHENTICATED_FIRST` (default true),
 `RATE_LIMIT_PER_MINUTE` (default 10).
