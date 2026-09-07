@@ -24,11 +24,12 @@ const EXPORTED = [
   "MAX_RESULTS", "SNIPPET_MAX_LENGTH",
   "parseQuery", "buildRequestBody", "searchRequest",
   "parseRoute", "formatRoute", "legacyTarget", "legacyRedirect",
-  "resolveKey", "selectMode", "proxyUnavailable",
+  "resolveKey", "normalizeMode", "proxyStatus", "selectMode", "proxyUnavailable",
   "resultsFrom", "resultTitle", "pickSnippet", "normalizeSnippet", "isLinkableUrl", "displayUrl",
   "formatDate",
-  "escapeXml", "errorMessage", "keyCheckResult", "modeIndicator",
-  "resolveEngineName", "DEFAULT_ENGINE_NAME",
+  "escapeXml", "errorMessage", "keyCheckResult",
+  "modeLabel", "proxyNote", "modeStateText", "keyStateText", "formatElapsed",
+  "resolveEngineName", "DEFAULT_ENGINE_NAME", "DEFAULT_MODE",
 ];
 
 function extractCore() {
@@ -199,7 +200,7 @@ test("searchRequest sends the key to Keenable in direct mode", () => {
 test("searchRequest never attaches a key to the proxy call", () => {
   // The proxy is same-origin and carries the operator's credential server-side; a visitor's key
   // has no business travelling there.
-  const { url, options } = requestFor("shared", "keen_abc");
+  const { url, options } = requestFor("proxied", "keen_abc");
   assert.equal(url, PROXY_PATH);
   assert.equal("X-API-Key" in options.headers, false);
   assert.deepEqual(options.headers, {
@@ -210,7 +211,7 @@ test("searchRequest never attaches a key to the proxy call", () => {
 
 test("searchRequest never lets a search carry cookies", () => {
   // Keenable answers with Access-Control-Allow-Credentials: true, so this is stated, not assumed.
-  for (const mode of ["direct", "shared"]) {
+  for (const mode of ["direct", "proxied"]) {
     assert.equal(requestFor(mode, "keen_abc").options.credentials, "omit");
     assert.equal(requestFor(mode, "keen_abc").options.referrerPolicy, "no-referrer");
   }
@@ -236,7 +237,7 @@ test("searchRequest tolerates a missing key rather than sending undefined", () =
 test("searchRequest refuses a mode it does not know rather than defaulting to the proxy", () => {
   // "anything that is not direct" would aim a real request at PROXY_PATH the moment a mode value
   // went wrong. There are two endpoints and the function names both of them.
-  for (const mode of [undefined, null, "", "nokey", "Direct", "proxy"]) {
+  for (const mode of [undefined, null, "", "nokey", "Direct", "proxy", "shared"]) {
     assert.throws(() => core.searchRequest({ mode, key: "keen_abc", body: {} }), /mode/,
       `expected ${JSON.stringify(mode)} to throw`);
   }
@@ -347,47 +348,65 @@ test("legacyRedirect leaves a URL with no legacy parameter alone", () => {
 
 /* ---- mode selection ---- */
 
-test("selectMode returns direct whenever a key is present", () => {
-  for (const protocol of ["https:", "http:", "file:"]) {
-    for (const proxyKnownBad of [true, false]) {
-      assert.equal(
-        core.selectMode({ key: "keen_x", protocol, proxyKnownBad, proxyPath: "/api/search" }),
-        "direct",
-      );
-    }
+test("normalizeMode keeps the two real modes and defaults everything else", () => {
+  // A hand-edited localStorage value is a preference, not input: an unknown one falls back to the
+  // default rather than erroring or being carried around as a third mode.
+  assert.equal(core.normalizeMode("proxied"), "proxied");
+  assert.equal(core.normalizeMode("direct"), "direct");
+  assert.equal(core.DEFAULT_MODE, "proxied");
+  for (const junk of [undefined, null, "", "  ", "shared", "Direct", "PROXIED", 0, {}]) {
+    assert.equal(core.normalizeMode(junk), core.DEFAULT_MODE,
+      `expected the default mode for ${JSON.stringify(junk)}`);
   }
 });
 
-test("selectMode returns nokey with no key over file:", () => {
-  assert.equal(
-    core.selectMode({ key: null, protocol: "file:", proxyKnownBad: false,
-                      proxyPath: "/api/search" }),
-    "nokey",
-  );
-});
-
-test("selectMode returns shared with no key over http(s) and a healthy proxy", () => {
+test("proxyStatus calls a proxy impossible only where it structurally is", () => {
+  const path = "/api/search";
+  assert.equal(core.proxyStatus({ protocol: "file:", proxyPath: path, proxyKnownBad: false }),
+    "blocked");
+  assert.equal(core.proxyStatus({ protocol: "https:", proxyPath: "", proxyKnownBad: false }),
+    "blocked");
+  assert.equal(core.proxyStatus({ protocol: "https:", proxyPath: path, proxyKnownBad: true }),
+    "missing");
+  // "possible" is also the answer before anything has asked, which is the whole reason the page
+  // cannot decide the mode from the deployment alone.
   for (const protocol of ["http:", "https:"]) {
-    assert.equal(
-      core.selectMode({ key: null, protocol, proxyKnownBad: false, proxyPath: "/api/search" }),
-      "shared",
-    );
+    assert.equal(core.proxyStatus({ protocol, proxyPath: path, proxyKnownBad: false }), "possible");
+  }
+  // Called with nothing: no protocol and no path is a page with nothing behind it, not "possible".
+  assert.equal(core.proxyStatus(), "blocked");
+});
+
+const HOSTED = { protocol: "https:", proxyPath: "/api/search", proxyKnownBad: false };
+
+test("selectMode honours a Proxied preference wherever a proxy can answer", () => {
+  // Including when a key is saved: the preference is the visitor's, and a key is for Direct mode,
+  // not a silent override of it.
+  for (const key of [null, "", "keen_x"]) {
+    assert.equal(core.selectMode({ preference: "proxied", key, ...HOSTED }), "proxied");
+  }
+  assert.equal(core.selectMode({ key: null, ...HOSTED }), "proxied", "default is proxied");
+});
+
+test("selectMode honours a Direct preference, and says nokey rather than falling back", () => {
+  // The visitor asked for Direct. With no key the search cannot run, and quietly proxying it
+  // would send to Froogle's servers the query they chose to keep away from them.
+  assert.equal(core.selectMode({ preference: "direct", key: "keen_x", ...HOSTED }), "direct");
+  for (const key of [null, "", "   ", undefined]) {
+    assert.equal(core.selectMode({ preference: "direct", key, ...HOSTED }), "nokey");
   }
 });
 
-test("selectMode returns nokey once the proxy is known bad", () => {
-  assert.equal(
-    core.selectMode({ key: null, protocol: "https:", proxyKnownBad: true,
-                      proxyPath: "/api/search" }),
-    "nokey",
-  );
-});
-
-test("selectMode returns nokey when no proxy path is configured", () => {
-  assert.equal(
-    core.selectMode({ key: "", protocol: "https:", proxyKnownBad: false, proxyPath: "" }),
-    "nokey",
-  );
+test("selectMode falls back to Direct where Proxied is impossible", () => {
+  const impossible = [
+    { protocol: "file:", proxyPath: "/api/search", proxyKnownBad: false },
+    { protocol: "https:", proxyPath: "", proxyKnownBad: false },
+    { protocol: "https:", proxyPath: "/api/search", proxyKnownBad: true },
+  ];
+  for (const where of impossible) {
+    assert.equal(core.selectMode({ preference: "proxied", key: "keen_x", ...where }), "direct");
+    assert.equal(core.selectMode({ preference: "proxied", key: null, ...where }), "nokey");
+  }
 });
 
 test("proxyUnavailable is true only for a proxy that provably is not there", () => {
@@ -413,8 +432,8 @@ test("proxyUnavailable leaves an ambiguous failure alone", () => {
 test("errorMessage reduces an unreadable response to the generic retryable message", () => {
   // A body that would not parse says nothing a visitor can act on, so it reads the same as a
   // dropped connection rather than exposing that distinction, which exists for the proxy probe.
-  const generic = toHost(core.errorMessage({ status: 0, mode: "shared" }));
-  assert.deepEqual(toHost(core.errorMessage({ status: "unreadable", mode: "shared" })), generic);
+  const generic = toHost(core.errorMessage({ status: 0, mode: "proxied" }));
+  assert.deepEqual(toHost(core.errorMessage({ status: "unreadable", mode: "proxied" })), generic);
   assert.deepEqual(toHost(core.errorMessage({ status: "unreadable", mode: "direct" })), generic);
   assert.doesNotMatch(generic.text, /unreadable|parse|JSON/i);
 });
@@ -582,27 +601,27 @@ function messageFor(status, mode, engineName) {
 
 test("errorMessage distinguishes the two modes at 429", () => {
   const direct = messageFor(429, "direct");
-  const shared = messageFor(429, "shared");
-  assert.notEqual(direct.text, shared.text);
+  const proxied = messageFor(429, "proxied");
+  assert.notEqual(direct.text, proxied.text);
   assert.equal(direct.action, null);
-  assert.equal(shared.action, "settings");
-  assert.match(shared.text, /own free Keenable key/);
+  assert.equal(proxied.action, "settings");
+  assert.match(proxied.text, /own free Keenable key/);
 });
 
 test("errorMessage points a rejected key at settings, in direct mode only", () => {
   for (const status of [401, 403]) {
     assert.equal(messageFor(status, "direct").action, "settings");
-    assert.equal(messageFor(status, "shared").action, null);
+    assert.equal(messageFor(status, "proxied").action, null);
   }
 });
 
 test("errorMessage reports exhausted credits in direct mode only", () => {
   assert.match(messageFor(402, "direct").text, /out of credits/);
-  assert.match(messageFor(402, "shared").text, /unavailable/);
+  assert.match(messageFor(402, "proxied").text, /unavailable/);
 });
 
 test("errorMessage explains a 400 as a search problem in either mode", () => {
-  for (const mode of ["direct", "shared"]) {
+  for (const mode of ["direct", "proxied"]) {
     assert.match(messageFor(400, mode).text, /could not be understood/);
     assert.equal(messageFor(400, mode).action, null);
   }
@@ -612,7 +631,7 @@ test("errorMessage gives one generic message for 5xx and network failure", () =>
   const generic = "Search is unavailable right now. Try again.";
   for (const status of [500, 502, 503, 0]) {
     assert.equal(messageFor(status, "direct").text, generic);
-    assert.equal(messageFor(status, "shared").text, generic);
+    assert.equal(messageFor(status, "proxied").text, generic);
   }
 });
 
@@ -621,26 +640,42 @@ test("errorMessage no longer knows about an unwired search", () => {
   assert.equal(messageFor("unwired", "direct").text, messageFor(500, "direct").text);
 });
 
-test("errorMessage handles the timeout and no-key sentinels", () => {
+test("errorMessage handles the timeout sentinel", () => {
   assert.match(messageFor("timeout", "direct").text, /too long/);
   assert.equal(messageFor("timeout", "direct").action, null);
-  assert.match(messageFor("nokey", "nokey").text, /Keenable API key/);
+});
+
+test("errorMessage asks for a key when Direct was chosen without one", () => {
+  assert.match(messageFor("nokey", "nokey").text, /Direct mode needs a Keenable API key/);
   assert.equal(messageFor("nokey", "nokey").action, "settings");
 });
 
+test("errorMessage explains a missing proxy differently depending on the fallback", () => {
+  // With a key saved the next search goes direct on its own, so asking for a key would be wrong;
+  // with none there is nothing to fall back to and the visitor has to add one.
+  const withKey = messageFor("noproxy", "direct");
+  const without = messageFor("noproxy", "nokey");
+  assert.match(withKey.text, /no proxy of its own/);
+  assert.match(withKey.text, /with your key/);
+  assert.equal(withKey.action, null);
+  assert.match(without.text, /no proxy of its own/);
+  assert.match(without.text, /Switch to Direct mode/);
+  assert.equal(without.action, "settings");
+});
+
 test("errorMessage names the configured engine, and falls back to the default name", () => {
-  assert.match(messageFor("nokey", "nokey", RENAMED).text, new RegExp("copy of " + RENAMED));
-  assert.match(messageFor(429, "shared", RENAMED).text, new RegExp("^" + RENAMED + "'s"));
-  assert.match(messageFor("nokey", "nokey").text, /copy of Froogle/);
-  assert.match(messageFor(429, "shared", "   ").text, /^Froogle's/);
+  assert.match(messageFor("noproxy", "nokey", RENAMED).text, new RegExp("copy of " + RENAMED));
+  assert.match(messageFor(429, "proxied", RENAMED).text, new RegExp("^" + RENAMED + "'s"));
+  assert.match(messageFor("noproxy", "nokey").text, /copy of Froogle/);
+  assert.match(messageFor(429, "proxied", "   ").text, /^Froogle's/);
   assert.equal(core.DEFAULT_ENGINE_NAME, "Froogle");
 });
 
 test("errorMessage never leaks a raw status code or an empty message", () => {
   const statuses = [0, 400, 401, 402, 403, 404, 429, 500, 503,
-                    "timeout", "nokey", undefined];
+                    "timeout", "nokey", "noproxy", undefined];
   for (const status of statuses) {
-    for (const mode of ["direct", "shared", "nokey"]) {
+    for (const mode of ["direct", "proxied", "nokey"]) {
       const { text, action } = messageFor(status, mode);
       assert.ok(text.length > 10, `message for ${status}/${mode} is too short`);
       assert.doesNotMatch(text, /\b[45]\d\d\b/, `message for ${status}/${mode} leaks a code`);
@@ -698,19 +733,86 @@ test("keyCheckResult always returns a plain message that leaks no status code", 
   }
 });
 
-test("modeIndicator describes each mode and only prompts for a key when there is none", () => {
-  assert.deepEqual(toHost(core.modeIndicator("direct", "Froogle")),
-    { text: "Direct: your searches go straight to Keenable.", action: null });
-  assert.deepEqual(toHost(core.modeIndicator("shared", "Froogle")),
-    { text: "Queries proxied through Froogle. Zero logs.", action: null });
-  assert.deepEqual(toHost(core.modeIndicator("nokey", "Froogle")),
-    { text: "No API key set.", action: "settings" });
+test("modeLabel names the mode a search would actually use", () => {
+  assert.equal(core.modeLabel("proxied"), "Mode: Proxied");
+  assert.equal(core.modeLabel("direct"), "Mode: Direct");
+  // Not "Direct": a page with no key cannot search, and labelling it Direct would say it can.
+  assert.equal(core.modeLabel("nokey"), "Mode: no key");
+  assert.equal(core.modeLabel(undefined), "Mode: no key");
 });
 
-test("modeIndicator names the configured engine, and falls back to the default name", () => {
-  assert.equal(core.modeIndicator("shared", RENAMED).text,
-    "Queries proxied through " + RENAMED + ". Zero logs.");
-  assert.equal(core.modeIndicator("shared").text, "Queries proxied through Froogle. Zero logs.");
+test("proxyNote gives a reason only where Proxied cannot be honoured", () => {
+  assert.equal(core.proxyNote("possible", "Froogle"), null);
+  assert.match(core.proxyNote("blocked", "Froogle"), /no server behind it/);
+  assert.match(core.proxyNote("missing", "Froogle"), /nothing is answering/);
+  assert.match(core.proxyNote("blocked", RENAMED), new RegExp("copy of " + RENAMED));
+  assert.match(core.proxyNote("missing", RENAMED), new RegExp("copy of " + RENAMED));
+  assert.match(core.proxyNote("missing"), /copy of Froogle/);
+});
+
+test("proxyNote states the deployment fact and gives no advice", () => {
+  // Advice belongs to modeStateText, the only one of the two that knows whether a key is saved.
+  // A note telling a visitor to "switch to Direct and add a key" would otherwise appear on the
+  // same screen as a line saying searches already go direct with the key they already added.
+  for (const status of ["blocked", "missing"]) {
+    const note = core.proxyNote(status, "Froogle");
+    assert.doesNotMatch(note, /switch|add a key|instead|Settings/i,
+      `the ${status} note should not advise: ${note}`);
+  }
+});
+
+test("modeStateText restates the chosen mode when it is the one running", () => {
+  assert.match(core.modeStateText({ preference: "proxied", effective: "proxied" }),
+    /through Froogle's proxy/);
+  assert.match(core.modeStateText({ preference: "direct", effective: "direct" }),
+    /straight from this browser to Keenable/);
+  assert.match(core.modeStateText({ preference: "proxied", effective: "proxied",
+                                    engineName: RENAMED }),
+    new RegExp(RENAMED + "'s proxy"));
+});
+
+test("modeStateText says plainly when the chosen mode is not the one running", () => {
+  // The radio still shows what was chosen — the preference is never rewritten — so this line is
+  // the only place that can say what is happening instead.
+  assert.match(core.modeStateText({ preference: "proxied", effective: "direct" }),
+    /Proxied is not available here.*saved key/);
+  assert.match(core.modeStateText({ preference: "proxied", effective: "nokey" }),
+    /Proxied is not available here.*needs a Keenable API key/);
+  assert.match(core.modeStateText({ preference: "direct", effective: "nokey" }),
+    /Direct mode needs a Keenable API key/);
+});
+
+test("modeStateText treats an unreadable stored preference as the default", () => {
+  assert.equal(core.modeStateText({ preference: "nonsense", effective: "proxied" }),
+    core.modeStateText({ preference: "proxied", effective: "proxied" }));
+  assert.equal(core.modeStateText(), core.modeStateText({ preference: "proxied",
+    effective: undefined }));
+});
+
+test("keyStateText reports the key this browser holds, and nothing about the mode", () => {
+  // The mode line above it owns the mode; two lines describing it could drift apart.
+  assert.equal(core.keyStateText({ builtIn: false, saved: true }), "A key is saved in this browser.");
+  assert.equal(core.keyStateText({ builtIn: false, saved: false }),
+    "No key is saved in this browser.");
+  assert.match(core.keyStateText({ builtIn: true, saved: true }), /has a key built in/);
+  assert.match(core.keyStateText({ builtIn: true, saved: false, engineName: RENAMED }),
+    new RegExp("copy of " + RENAMED));
+  assert.match(core.keyStateText(), /No key is saved/);
+  for (const line of [core.keyStateText({ saved: true }), core.keyStateText({ builtIn: true })]) {
+    assert.doesNotMatch(line, /proxied|direct|mode/i);
+  }
+});
+
+test("formatElapsed reports a real measurement to two decimals, or nothing at all", () => {
+  assert.equal(core.formatElapsed(184), "0.18 seconds");
+  assert.equal(core.formatElapsed(1234.5), "1.23 seconds");
+  assert.equal(core.formatElapsed(0), "0.00 seconds");
+  // Anything that is not a measurement shows nothing rather than "NaN seconds": the number is a
+  // claim about this deployment's speed and a fabricated one would be unfalsifiable.
+  for (const value of [undefined, null, -1, NaN, Infinity, "180", {}]) {
+    assert.equal(core.formatElapsed(value), null,
+      `expected null for ${JSON.stringify(value)}`);
+  }
 });
 
 test("resolveEngineName falls back to the default for a blank or missing name", () => {

@@ -10,17 +10,20 @@ Hybrid, because of a measured constraint in Keenable's CORS config: the **keyles
 requires an `X-Keenable-Title` header that their own preflight forbids, so no browser can call it;
 the **keyed** endpoint has no such requirement and is browser-callable.
 
+The visitor chooses which of the two the page uses, in Settings; the choice is stored separately
+from the key, and constrained only by what a given copy of the page can actually do.
+
+* **Proxied mode** (the default) — the browser calls Froogle's own thin proxy, which tries the
+  keyless endpoint first and falls back to the operator's key. Zero setup, and Froogle passes on
+  no identifier and no visitor IP.
 * **Direct mode** — with a key (baked in by a self-hoster, or saved by a visitor into
-  `localStorage`), the browser calls Keenable itself. Nothing touches a Froogle server. On the
-  hosted instance, a visitor who sets a key never calls the proxy again.
-* **Shared mode** — with no key, the browser calls Froogle's own thin proxy, which tries the
-  keyless endpoint first and falls back to the operator's key.
+  `localStorage`), the browser calls Keenable itself. Nothing touches a Froogle server.
 
 ## The repo
 
 * `index.html` — the entire frontend. Markup, CSS, and JS in one file.
 * `functions/api/search.js` — the optional proxy (Cloudflare Pages Function, same-origin).
-* `README.md`
+* `README.md`, `LICENSE` (MIT)
 
 ## Self hosting
 
@@ -40,20 +43,22 @@ Proxy environment: `KEENABLE_API_KEY`, `UNAUTHENTICATED_FIRST` (default true).
 
 ## Design
 
-Inspired by old-school web search: a wordmark above a search box, a small about link at the bottom,
-and a SERP that is a plain list of links. **Inspired by, not a clone** — no Google colors, fonts,
-logo forms, or layout measurements. No frameworks, no build step, no dependencies, no images.
+White ground, `#111` ink, a Helvetica-first stack, one blue link, a 660px measure. A wordmark and
+a tagline above an underlined search field on home; a wordmark, field and utility row above a plain
+list of links on the SERP. No frameworks, no build step, no dependencies, no images, no icons. See
+`ui_design.md`.
 
 ## About page
 
 Part of the same single-page app, at `#about`. Covers roughly what the README covers, rendered for
 the web:
 
-* A free single-page search engine.
-* How it works: results come from Keenable. In direct mode your browser calls them itself and your
-  query never reaches a Froogle server; in shared mode it passes through Froogle's proxy, which
-  logs and stores nothing.
-* Privacy: no cookies, no analytics, no third-party code. A saved key stays in your browser.
+* A fast, ad-free search engine — fast, ad-free, simple, private.
+* Powered by the Keenable API, and not associated with Keenable.
+* Privacy: Keenable sees every query and may track it. On the Froogle side, the two modes and
+  their tradeoffs — proxied, where Froogle logs nothing and passes on no identifier or IP, and
+  direct, where the browser talks to Keenable itself with the visitor's own key.
+* Self hosting, with a link to the repo.
 
 ## Routing and privacy
 

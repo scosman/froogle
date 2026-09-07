@@ -23,6 +23,7 @@ functions/api/search.js    the proxy (Cloudflare Pages Function). Optional.
 test/core.test.mjs         unit tests for the frontend's pure core
 test/proxy.test.mjs        unit tests for the proxy
 README.md
+LICENSE                    MIT
 ```
 
 `test/` is dev-only and affects nothing at deploy time. It needs no `npm install`: Node 18+ ships
@@ -80,14 +81,17 @@ buildRequestBody(parsed) -> object            // adds mode, max_results, snippet
 // to which host — is therefore a pure function under test rather than a branch inside a fetch
 // call: X-API-Key is attached in direct mode only, so a key can never travel to the proxy. The
 // endpoints are parameters because they are declared above the core marker. Throws on any mode
-// but "direct" or "shared", rather than treating an unknown one as the proxy.
+// but "direct" or "proxied", rather than treating an unknown one as the proxy.
 searchRequest({ mode, key, body, directUrl, proxyPath }) -> { url, options }
 
-// Mode selection.
-resolveKey(configKey, stored)  -> string | null
-selectMode({ key, protocol, proxyKnownBad, proxyPath }) -> "direct" | "shared" | "nokey"
+// Mode: a stored preference, constrained by what this copy of the page can do.
+resolveKey(configKey, stored)   -> string | null
+normalizeMode(value)            -> "proxied" | "direct"          // anything unknown -> DEFAULT_MODE
+proxyStatus({ protocol, proxyPath, proxyKnownBad }) -> "possible" | "blocked" | "missing"
+selectMode({ preference, key, protocol, proxyKnownBad, proxyPath })
+                                -> "direct" | "proxied" | "nokey"
 
-// Whether a shared-mode failure proves there is no proxy, rather than that a search failed.
+// Whether a proxied-mode failure proves there is no proxy, rather than that a search failed.
 // Only the unambiguous cases: 404, 405 and "unreadable". Not 0, not 5xx, not "timeout".
 proxyUnavailable(status) -> boolean
 
@@ -103,7 +107,11 @@ formatDate(iso)         -> string | null
 // to stay evaluable on its own, and SEARCH_ENGINE_NAME is declared above it.
 escapeXml(text) -> string
 errorMessage({ status, mode, engineName }) -> { text, action }   // action: null | "settings"
-modeIndicator(mode, engineName)           -> { text, action }
+modeLabel(mode)                           -> string             // the utility-row mode line
+proxyNote(status, engineName)             -> string | null      // why Proxied cannot be honoured
+modeStateText({ preference, effective, engineName }) -> string   // what searches actually do
+keyStateText({ builtIn, saved, engineName })         -> string   // which key this browser holds
+formatElapsed(ms) -> string | null        // "0.19 seconds", or null for a non-measurement
 
 // Settings: what a validation search's outcome means for a pasted key, given the shape the client
 // returns — { results } on success, { status } on failure.
@@ -111,22 +119,34 @@ keyCheckResult(outcome) -> { save, text }
 ```
 
 `SEARCH_ENGINE_NAME` is a documented configuration option, so a renamed instance must read
-correctly in every string it appears in. The three places that name it are the core messages above,
-the settings key-state line, and the static prose — the last through `[data-engine-name]` spans
-filled at startup alongside `[data-wordmark]`. `DEFAULT_ENGINE_NAME` in the core mirrors the config
+correctly in every string it appears in. The two places that name it are the core messages above —
+all of which take `engineName` — and the static prose, through `[data-engine-name]` spans filled at
+startup alongside `[data-wordmark]`. `DEFAULT_ENGINE_NAME` in the core mirrors the config
 default and stands in when a caller passes nothing.
 
 `selectMode` centralizes the whole hybrid decision, which is otherwise the easiest thing in this
-app to get subtly wrong:
+app to get subtly wrong. It is the visitor's preference, constrained by `proxyStatus`:
 
-| key | protocol | proxy known bad | result |
+| preference | proxy status | key | result |
 |---|---|---|---|
-| present | any | any | `direct` |
-| none | `file:` | — | `nokey` |
-| none | http(s) | no | `shared` |
-| none | http(s) | yes | `nokey` |
+| `proxied` | `possible` | any | `proxied` |
+| `proxied` | `blocked` / `missing` | present | `direct` |
+| `proxied` | `blocked` / `missing` | none | `nokey` |
+| `direct` | any | present | `direct` |
+| `direct` | any | none | `nokey` |
 
-Mode is computed per search, not cached, so saving or clearing a key takes effect on the next
+Two properties of that table are load-bearing. A saved key does **not** override a Proxied
+preference — a key is what Direct mode needs, not a silent switch into it. And a Direct preference
+with no key yields `nokey` rather than falling back to the proxy: quietly proxying would send
+Froogle's servers the very query the visitor chose to keep from them.
+
+`proxyStatus` separates the two ways a proxy can be absent, because they have different
+consequences. `blocked` (a `file://` copy, or an empty `PROXY_PATH`) is structural and permanent
+for that deployment, so the Settings radio is disabled. `missing` was learned from one request this
+session and may be wrong for the next deploy of the same file, so the radio stays enabled and the
+stored preference is never rewritten.
+
+Mode is computed per search, not cached, so saving a key or switching mode takes effect on the next
 search with no reload.
 
 ### Request flow
@@ -136,10 +156,10 @@ submit
   -> parseQuery(raw)
   -> buildRequestBody
   -> selectMode
-  -> direct: POST https://api.keenable.ai/v1/search   with X-API-Key
-     shared: POST <PROXY_PATH>                        with no auth header
-     nokey : render the no-key notice, no request
-  -> render
+  -> direct : POST https://api.keenable.ai/v1/search   with X-API-Key
+     proxied: POST <PROXY_PATH>                        with no auth header
+     nokey  : render "nokey" or "noproxy" per the preference, no request
+  -> render, with performance.now() either side of the fetch for the timing line
 ```
 
 `mode: "pro"`, `max_results: 25`, `snippet_max_length: 400` on every request. Filters are added
@@ -158,11 +178,12 @@ two abort causes apart exactly, rather than by sniffing an error's name. Timeout
 own `"timeout"` status and the "took too long" message; a supersede abort is discarded by the seq
 check before its status is ever read.
 
-**Proxy unavailability.** In shared mode, a response that is 404 or 405, or that arrives with a
+**Proxy unavailability.** In proxied mode, a response that is 404 or 405, or that arrives with a
 body which will not parse as JSON (status `"unreadable"` — a static host answering the proxy path
-with an HTML page), marks `sessionStorage["froogle.proxyUnavailable"] = "1"` and re-renders as
-`nokey`. Subsequent searches skip the doomed request entirely. On `file:` the probe never runs at
-all.
+with an HTML page), marks `sessionStorage["froogle.proxyUnavailable"] = "1"` and re-renders with
+the `"noproxy"` message. Subsequent searches select their mode with the proxy already known bad, so
+they either go direct with a saved key or stop at the notice before any request is made. On `file:`
+the probe never runs at all. The stored **preference** is untouched throughout.
 
 The `"unreadable"` half of that rests on a guarantee the proxy makes rather than on an assumption
 about proxies in general: it turns a 2xx it cannot parse into a 502, so a successful response from
@@ -174,19 +195,19 @@ mean something is there and is broken. Retiring the proxy on any of them would s
 a flaky connection *and* flip the About page to a claim that is then false.
 
 The flag is mirrored in a module-level variable, because `writeStore` returns false in Safari's
-"block all cookies" and an unrecorded probe would leave the notice and the footer disagreeing
-about the very same question.
+"block all cookies" and an unrecorded probe would leave the search notice and the Settings mode
+lines disagreeing about the very same question.
 
-**Proxy availability**, the other half, is a separate and *unpersisted* fact: `proxyAnswered`, set
-only when a shared-mode request comes back readable. Until then the deployment prose says it does
-not know — see below. A failed response is not proof of presence, since a 500 or a 429 at that
-path could come from a static host or an edge rule as easily as from a proxy.
+There is no matching "the proxy answered" flag any more. It existed to drive three variants of
+deployment-conditional prose on About and Settings; the mode is now chosen rather than inferred, so
+the prose describes both modes unconditionally and the page never has to guess which kind of copy
+it is before it has asked.
 
 ### Rendering and injection safety
 
-Results are built with `document.createElement` and `textContent`. `innerHTML` is used nowhere in
-the result path — the only `innerHTML` in the file is the static view markup authored by us, and a
-lint-style comment marks it as such.
+Results are built with `document.createElement` and `textContent`. `innerHTML` appears nowhere in
+`index.html` at all — not in the result path and not in the view markup, which is authored as HTML
+in the document rather than assembled by the script.
 
 * `href` is set only after `isLinkableUrl` passes, which parses with `new URL()` and requires
   `http:` or `https:`. This blocks `javascript:`, `data:`, and `vbscript:` URLs.
@@ -228,12 +249,22 @@ lint-style comment marks it as such.
 | Key | Store | Contents |
 |---|---|---|
 | `froogle.key` | `localStorage` | The visitor's Keenable API key |
+| `froogle.mode` | `localStorage` | The chosen mode, `"proxied"` or `"direct"`. Absent until chosen |
 | `froogle.proxyUnavailable` | `sessionStorage` | `"1"` once a proxy probe has failed |
+
+The mode and the key are separate entries on purpose: switching to Proxied and back must not
+destroy a saved key, and a key must not imply a mode.
 
 Every read and write is wrapped in `try/catch`. Safari's private mode and "block all cookies" both
 make these throw, and a search engine that white-screens because storage is unavailable is a worse
 failure than one that simply cannot remember a key. On failure the app behaves as if no key is
 stored.
+
+Two of the three are mirrored in module-level variables for the case where the write itself is
+refused: `proxyMissing`, so the page cannot go on believing in a proxy the notice in front of the
+visitor says is absent, and `modeMemory`, so a radio the visitor just clicked works for the rest of
+the tab instead of snapping back with no explanation. Both say so in the UI — the Settings line
+reports that the choice will be forgotten when the tab closes.
 
 ## Proxy
 
@@ -277,7 +308,7 @@ shouldFallback(status)      -> boolean         // 401,402,429,5xx -> true; 400 -
 
    That exception is what makes the client's `"unreadable"` inference sound. The client reads "a
    2xx from `PROXY_PATH` carrying something that is not JSON" as proof no proxy is there — it is
-   what a static host does when it serves a page for every path — and retires shared mode for the
+   what a static host does when it serves a page for every path — and retires proxied mode for the
    session on it. Forwarding an empty or malformed 200 from Keenable would make a working
    deployment frame itself as a missing one, durably and wrongly. The guard is deliberately 2xx
    only: an error body is passed through whatever it contains, so an operator debugging a broken
@@ -326,9 +357,9 @@ failure and a dropped connection are indistinguishable to JavaScript by design, 
 same generic message rather than a guess. `"unreadable"` is the neighbouring case: a response did
 arrive, and its body was not JSON.
 
-The two read identically to the visitor, and exist as separate statuses for one reason — the shared
-mode proxy probe above, where "the server answered with a web page" is proof there is no proxy and
-"the connection dropped" is proof of nothing.
+The two read identically to the visitor, and exist as separate statuses for one reason — the
+proxied-mode proxy probe above, where "the server answered with a web page" is proof there is no
+proxy and "the connection dropped" is proof of nothing.
 
 No stack traces or raw status codes reach the UI. The proxy logs nothing.
 
@@ -362,7 +393,13 @@ Cases:
 * `legacyTarget` — `?q=` and `?about` map to fragments; anything else returns null.
 * `legacyRedirect` — follows the query string with no fragment present, keeps the fragment when
   there is one, returns null with nothing legacy to rewrite.
-* `selectMode` — every row of the table above.
+* `normalizeMode` — the two real modes survive; anything else, a hand-edited storage value
+  included, becomes the default.
+* `proxyStatus` — `blocked` on `file:` and on an empty path, `missing` once known bad, `possible`
+  otherwise, including before anything has asked.
+* `selectMode` — every row of the table above: a Proxied preference honoured even with a key
+  saved, a Direct preference refusing to fall back to the proxy, and both fallbacks where Proxied
+  is impossible.
 * `resolveKey` — config key wins over stored; whitespace-only treated as absent.
 * `isLinkableUrl` — rejects `javascript:`, `data:`, `vbscript:`, `file:`, and malformed input;
   accepts http and https.
@@ -372,12 +409,17 @@ Cases:
 * `pickSnippet` / `normalizeSnippet` — falls back to `description`; both absent yields `""`;
   newlines and runs of whitespace collapse.
 * `formatDate` — valid ISO, absent, and unparseable.
-* `errorMessage` / `modeIndicator` — every status, the mode-dependent difference at 429, and a
-  non-default `engineName` reaching every message that names the engine.
+* `errorMessage` — every status, the mode-dependent difference at 429, the two no-search sentinels
+  (`"nokey"` and `"noproxy"`, the latter differing by whether a key is there to fall back on), and
+  a non-default `engineName` reaching every message that names the engine.
+* `modeLabel` / `proxyNote` / `modeStateText` / `keyStateText` — the mode line for each mode; a
+  reason only where Proxied cannot be honoured; the state line for every combination of chosen and
+  effective mode; and that the key line says nothing about the mode.
+* `formatElapsed` — two decimals of a second, and null for anything that is not a measurement.
 * `escapeXml` — the five characters that would break the inline SVG favicon.
 * `buildRequestBody` — always sets `mode`, `max_results`, `snippet_max_length`; includes filters
   only when present.
-* `searchRequest` — direct mode targets Keenable and carries `X-API-Key`; shared mode targets the
+* `searchRequest` — direct mode targets Keenable and carries `X-API-Key`; proxied mode targets the
   relative proxy path and carries none; both are a `POST` with JSON content-type and accept
   headers, `credentials: "omit"`, and a body that round-trips to what `buildRequestBody` produced;
   any other mode throws.
@@ -407,12 +449,15 @@ Imports `functions/api/search.js` directly — it is a plain ES module — and i
 
 Browser-level behavior that cannot be unit tested, recorded in the README:
 
-* Loads and searches from `file://` with a stored key.
+* Loads and searches from `file://` with a stored key, with Proxied shown disabled and its reason.
+* Switching mode in Settings and back leaves a saved key intact.
 * Back and forward move between home, results, about, and settings.
 * A legacy `?q=` URL normalizes to `#q=` with no extra history entry.
-* Keyboard-only operation, visible focus throughout.
+* Keyboard-only operation, visible focus throughout, radios included.
 * Renders correctly at 320px width with no horizontal scroll.
-* Storage disabled (Safari private mode) degrades to the no-key state rather than breaking.
+* The search timing shows a real elapsed time on results and nothing anywhere else.
+* Storage disabled (Safari private mode) degrades to the no-key state rather than breaking, and
+  says so when a mode choice cannot be remembered.
 
 ## Deliberate non-choices
 
