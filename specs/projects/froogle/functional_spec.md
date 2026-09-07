@@ -88,11 +88,13 @@ Key resolution order: `API_KEY` → `localStorage` → none (shared mode if a pr
   edit.
 * A self-hoster who deploys the whole repo gets shared mode against their own proxy and their own
   key, with no edits.
-* Over `file://` it resolves to `file:///api/search` and fails.
+* Over `file://` no proxy can exist, so the app short-circuits on `location.protocol === "file:"`
+  and never attempts one — no doomed request, no console error, straight to the key prompt.
 
-The first failure (404, a non-JSON body, or a network error) marks the proxy unavailable for the
-rest of the session via `sessionStorage`, so a static-only deployment wastes one request per
-session rather than one per search, and every later search goes straight to the key prompt.
+Anywhere else, the first failure (404, a non-JSON body, or a network error) marks the proxy
+unavailable for the rest of the session via `sessionStorage`, so a static-only deployment wastes
+one request per session rather than one per search, and every later search goes straight to the
+key prompt.
 
 ### Proxy — environment variables
 
@@ -295,10 +297,12 @@ countdown is possible in direct mode; a limit is discoverable only when a 429 ar
 
 ## Open items
 
-* **Result count.** No count parameter exists in Keenable's schema or SDKs, so the app renders
-  whatever is returned. A probe for an undocumented parameter (`limit`, `count`, `top_k`,
-  `num_results`, `max_results`) is pending; if one works, it is a one-line addition.
-* **`file://` support** depends on Keenable echoing `Origin: null`. They reflect the origin rather
-  than returning `*`, so this needs one real browser test before the README promises it.
+* **Result count.** The keyless endpoint returns **10 results** for a typical query. No count
+  parameter exists in Keenable's schema or SDKs; a probe of undocumented names (`limit`, `count`,
+  `top_k`, `num_results`, `max_results`) against the keyed endpoint is still outstanding. If one
+  works it is a one-line addition; if not, 10 results with no second page stands, which matches
+  the classic SERP shape anyway.
+* **`snippet_max_length`** is sent by both official SDKs but absent from the OpenAPI schema.
+  Whether it is honored is still unmeasured, which is why the UI truncates regardless.
 * **Ask Keenable to allowlist `X-Keenable-Title`.** If they do, keyless becomes available to the
   browser and can become the zero-signup default, with the proxy demoted or removed.

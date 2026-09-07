@@ -170,11 +170,21 @@ access-control-expose-headers: Content-Type,Authorization,X-Request-Id
 
 5. Confirms the keyless limit is **1,000/hour**, with an absolute ISO reset timestamp.
 
+### Measured end-to-end
+
+* `POST /v1/search` with only `Content-Type` and `X-API-Key` returns **200**. Keyed browser search
+  works; the title header really is keyless-only.
+* `Origin: null` is echoed back as `access-control-allow-origin: null`, and a real browser test
+  from a saved `file://` page confirms the keyed call succeeds there. The "run it from your
+  Downloads folder" deployment is viable.
+* The same browser test confirms the keyless call is **blocked by the browser** at preflight, not
+  merely inferred from the allow-headers list.
+* A typical query returns **10 results** on the keyless endpoint.
+
 ### Still open
 
-* Does `file://` / `Origin: null` work? (gates the "Downloads folder" deployment promise)
-* Confirm with a real key that `POST /v1/search` succeeds with no `X-Keenable-Title` (inferred from
-  the error wording, not yet measured).
+* Does any undocumented count parameter raise the result count above 10?
+* Is `snippet_max_length` actually honored?
 
 ### The MCP endpoint is not a way around this
 
