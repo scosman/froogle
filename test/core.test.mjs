@@ -231,7 +231,16 @@ test("searchRequest serializes the request body unchanged", () => {
 
 test("searchRequest tolerates a missing key rather than sending undefined", () => {
   assert.equal(requestFor("direct", undefined).options.headers["X-API-Key"], "");
-  assert.equal(toHost(core.searchRequest()).options.headers["X-API-Key"], undefined);
+});
+
+test("searchRequest refuses a mode it does not know rather than defaulting to the proxy", () => {
+  // "anything that is not direct" would aim a real request at PROXY_PATH the moment a mode value
+  // went wrong. There are two endpoints and the function names both of them.
+  for (const mode of [undefined, null, "", "nokey", "Direct", "proxy"]) {
+    assert.throws(() => core.searchRequest({ mode, key: "keen_abc", body: {} }), /mode/,
+      `expected ${JSON.stringify(mode)} to throw`);
+  }
+  assert.throws(() => core.searchRequest(), /mode/);
 });
 
 /* ---- routing ---- */

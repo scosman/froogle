@@ -15,10 +15,11 @@ Phase 3 owns the proxy and the shared-mode request. Two consequences for this ph
 
 * `selectMode` already returns `"shared"` for a keyless visitor on `http(s)`, but nothing can
   serve that request yet. `currentMode()` therefore carries a **one-line bridge** mapping
-  `"shared"` to `"nokey"` until the proxy client exists, so the footer, the mode indicator and the
-  search path all tell the same true story about a Phase 2 build. Phase 3 deletes that line.
-  This mirrors how Phase 1 handled the unwired search: one marked branch, deleted by the phase
-  that makes it false.
+  `"shared"` to `"nokey"` until the proxy client exists, so the footer, the mode indicator, the
+  Settings key-state line and the search path all tell the same true story about a Phase 2 build.
+  Phase 3 deletes that line, and nothing else: every one of those four is derived from
+  `currentMode()`, so the deletion is a single coordinated edit. This mirrors how Phase 1 handled
+  the unwired search: one marked branch, deleted by the phase that makes it false.
 * `searchRequest` — the pure function that turns a mode plus a key into a URL and headers —
   is written whole, covering the proxy target as well as the direct one. It is request
   *construction*, not the shared-mode path: splitting "which credential goes to which host" across
@@ -51,7 +52,9 @@ What is left above the core marker is wiring — a `fetch` call, a timer, and `c
    * `searchRequest` sets `Content-Type` and `Accept: application/json`, and attaches
      `X-API-Key` **only** in direct mode, so a key can never travel to the proxy. `credentials`
      is `"omit"` explicitly — Keenable answers with `Access-Control-Allow-Credentials: true` and a
-     search has no business carrying cookies. `referrerPolicy: "no-referrer"`.
+     search has no business carrying cookies. `referrerPolicy: "no-referrer"`. It throws on any
+     mode but `"direct"` or `"shared"` rather than treating "not direct" as the proxy, which would
+     quietly aim a real request at `PROXY_PATH` the moment a mode value went wrong.
    * `resultsFrom` returns `[]` for anything that is not an object carrying an array, and drops
      entries with neither a title nor a URL, which would otherwise draw a blank row.
    * `keyCheckResult` saves on success, refuses **only** on 401/403 — the sole statuses that prove
@@ -112,11 +115,24 @@ What is left above the core marker is wiring — a `fetch` call, a timer, and `c
    class="result-title-plain">` and no `href` is ever set. The URL line and the snippet line are
    omitted entirely when empty. The two-line clamp stays in CSS, as `ui_design.md` specifies.
 
+   Two accessibility details the visual design does not imply. `#notice` is the `aria-live`
+   region, and hiding it on success would follow "Searching…" with silence, so success puts the
+   result count in it under `visually-hidden` instead — spoken, never seen. And when a search
+   starts, focus moves to the results search box if it was on either Search button, since the one
+   is about to be disabled and the other hidden, and a browser drops focus to `<body>` with
+   nothing to restore it up to 15s later.
+
 7. **Settings key validation.** Save runs a real minimal search with the pasted key before
    storing it, disabling Save while it runs and reporting the outcome through `keyCheckResult`.
    A `keyCheckSeq` counter, bumped on navigation and on each attempt, keeps a slow check's message
-   from surfacing after the visitor has moved on — while still storing the key, which the visitor
-   did ask for.
+   — and the emptying of the input, which by then may hold something newly typed — from landing
+   after the visitor has moved on. The `localStorage` write stays outside that guard: storing the
+   key is what they asked for.
+
+   Both async entry points are called through a `.catch()` rather than `void`, and the body of
+   `saveKey` re-enables its buttons from a `finally`. Nothing in `requestSearch` throws, so the
+   realistic trigger is a bug in `render()` — but a silent unhandled rejection there strands the
+   page on "Searching…", or leaves Save and Clear disabled, with only a reload to undo it.
 
 8. **Tests** in `test/core.test.mjs` for the three new core functions, plus the `"unwired"`
    deletion.
@@ -127,7 +143,8 @@ What is left above the core marker is wiring — a `fetch` call, a timer, and `c
   targets the relative proxy path and carries **no** `X-API-Key`; both send JSON content type and
   accept headers, `POST`, `credentials: "omit"`, and a body that is the serialized request object.
 - `searchRequest` — the serialized body round-trips through `JSON.parse` to exactly what
-  `buildRequestBody` produced, filters included.
+  `buildRequestBody` produced, filters included; a missing key sends `""` rather than
+  `"undefined"`; and any mode but `"direct"` or `"shared"` throws.
 - `resultsFrom` — a well-formed payload passes through in order; a missing, null, or non-array
   `results` yields `[]`; a non-object payload yields `[]`; null and primitive entries are dropped;
   an entry with neither title nor URL is dropped; an entry with only a URL survives.
@@ -138,3 +155,9 @@ What is left above the core marker is wiring — a `fetch` call, a timer, and `c
   message, and no branch of the core mentions being unwired.
 - All 61 Phase 1 tests continue to pass, including the sandbox-globals diff and the
   no-DOM-dependency evaluation, which now cover three more exported functions.
+
+The DOM and `fetch` layers stay on the manual checklist per `architecture.md`. What is now
+checkable there and was not before, added to that checklist in Phase 3 alongside the README:
+the Settings key-state line, the footer and a search all agree about the mode; a screen reader
+announces the result count rather than falling silent; and keyboard focus survives a search
+started from either Search button.

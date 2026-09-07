@@ -222,7 +222,7 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
     <label class="visually-hidden" for="home-input">Search the web</label>
     <input class="search-input" id="home-input" name="q" type="search" autocomplete="off"
            autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Search the web">
-    <button type="submit">Search</button>
+    <button type="submit" id="home-submit">Search</button>
   </form>
 </section>
 
@@ -440,8 +440,14 @@ function buildRequestBody(parsed) {
    fetch call. The key is attached in direct mode only and so can never travel to the proxy.
 
    The endpoints are parameters because they are declared outside this region, alongside the rest
-   of the configuration a self-hoster edits. */
+   of the configuration a self-hoster edits.
+
+   An unrecognized mode throws rather than falling through to the proxy: "anything that is not
+   direct" would quietly aim a real request at PROXY_PATH the moment a mode value goes wrong. */
 function searchRequest({ mode, key, body, directUrl, proxyPath } = {}) {
+  if (mode !== "direct" && mode !== "shared") {
+    throw new Error("searchRequest: mode must be \"direct\" or \"shared\"");
+  }
   const direct = mode === "direct";
   const headers = { "Content-Type": "application/json", "Accept": "application/json" };
   if (direct) headers["X-API-Key"] = String(key ?? "");
@@ -711,6 +717,7 @@ const el = {
   homeInput: document.getElementById("home-input"),
   resultsForm: document.getElementById("results-form"),
   resultsInput: document.getElementById("results-input"),
+  homeSubmit: document.getElementById("home-submit"),
   resultsSubmit: document.getElementById("results-submit"),
   notice: document.getElementById("notice"),
   resultList: document.getElementById("results"),
@@ -810,7 +817,7 @@ function fillMessage(node, { text, action }) {
 
 function renderNotice() {
   const notice = el.notice;
-  if (state.status === "idle" || state.status === "ok") {
+  if (state.status === "idle") {
     notice.hidden = true;
     clear(notice);
     return;
@@ -818,6 +825,20 @@ function renderNotice() {
   notice.hidden = false;
   notice.className = "notice";
 
+  /* A hidden live region announces nothing, so success would follow "Searching…" with silence.
+     The count keeps the region in the accessibility tree and speaks it, while staying out of the
+     visual design, where the list itself is the answer. */
+  if (state.status === "ok") {
+    const count = state.results.length;
+    /* Not "notice visually-hidden": the two classes both set a margin, and nothing is gained by
+       styling something that is never seen. */
+    notice.className = "visually-hidden";
+    fillMessage(notice, {
+      text: count === 1 ? "1 result." : count + " results.",
+      action: null,
+    });
+    return;
+  }
   if (state.status === "searching") {
     fillMessage(notice, { text: "Searching…", action: null });
     return;
@@ -892,14 +913,24 @@ function renderFooter() {
   }
 }
 
+/* Derived from currentMode() rather than from storage directly, so this line cannot promise a
+   shared allowance while the footer just below it — and the search path — say there is no way to
+   search at all. It reports whatever the mode actually is, which keeps it correct on
+   file://, where there has never been a proxy, and again in Phase 3, when the bridge inside
+   currentMode() goes away and "shared" starts being reachable. */
 function keyStateText() {
-  if (typeof API_KEY === "string" && API_KEY.trim()) {
-    return "This copy of " + ENGINE_NAME + " has a key built in, which takes precedence "
-      + "over anything saved here.";
+  const mode = currentMode();
+  if (mode === "direct") {
+    return typeof API_KEY === "string" && API_KEY.trim()
+      ? "This copy of " + ENGINE_NAME + " has a key built in, which takes precedence "
+        + "over anything saved here."
+      : "Using a key stored in this browser.";
   }
-  return storedKey()
-    ? "Using a key stored in this browser."
-    : "No key set — searches use " + ENGINE_NAME + "'s shared allowance.";
+  if (mode === "shared") {
+    return "No key set — searches use " + ENGINE_NAME + "'s shared allowance.";
+  }
+  return "No key set, and this copy of " + ENGINE_NAME + " has no shared allowance to fall back "
+    + "on, so searching needs a key.";
 }
 
 /* Clear is disabled alongside Save so a check cannot land after the visitor has asked for the key
@@ -1011,10 +1042,18 @@ async function runSearch() {
     return;
   }
 
+  /* The submit button is about to be disabled, and the home view about to be hidden. A browser
+     drops focus to <body> when the element holding it goes away and puts it nowhere when the
+     button comes back up to 15s later, so it is moved to the search box — which stays populated
+     for editing, and is the better place for it regardless. */
+  const strandedFocus = document.activeElement === el.resultsSubmit
+    || document.activeElement === el.homeSubmit;
+
   state.status = "searching";
   state.results = [];
   state.error = null;
   render();
+  if (strandedFocus) el.resultsInput.focus();
 
   const controller = new AbortController();
   inFlight = controller;
@@ -1033,6 +1072,20 @@ async function runSearch() {
   state.status = outcome.results.length ? "ok" : "empty";
   state.error = null;
   render();
+}
+
+/* runSearch cannot reject through requestSearch, which catches everything — but a bug anywhere
+   after its await would otherwise be a silent unhandled rejection that leaves the page stuck on
+   "Searching…" with the submit button disabled and no way back but a reload. The generic error is
+   both true and recoverable; the console keeps the detail. */
+function startSearch() {
+  runSearch().catch((error) => {
+    console.error(error);
+    state.status = "error";
+    state.results = [];
+    state.error = { status: 0, mode: currentMode() };
+    render();
+  });
 }
 
 /* ---- settings ---- */
@@ -1054,25 +1107,34 @@ async function saveKey(key) {
   keyFeedback = "Checking that key with Keenable…";
   render();
 
-  const { save, text } = keyCheckResult(await requestSearch(KEY_CHECK_BODY, {
-    mode: "direct",
-    key,
-  }));
-  let message = text;
-  if (save) {
-    if (writeStore(localStorage, STORAGE_KEY, key)) {
-      el.keyInput.value = "";
-    } else {
-      message = "This browser is blocking storage, so the key cannot be saved. Private "
-        + "browsing mode is the usual cause.";
+  /* The finally clause is the point: a throw between here and the end would otherwise leave both
+     Save and Clear disabled for good, with only a reload to undo it. */
+  try {
+    const { save, text } = keyCheckResult(await requestSearch(KEY_CHECK_BODY, {
+      mode: "direct",
+      key,
+    }));
+    let message = text;
+    let stored = false;
+    if (save) {
+      stored = writeStore(localStorage, STORAGE_KEY, key);
+      if (!stored) {
+        message = "This browser is blocking storage, so the key cannot be saved. Private "
+          + "browsing mode is the usual cause.";
+      }
     }
+    /* A key that passed the check is stored whether or not the visitor is still watching —
+       storing it is what they asked for. The message and the emptied field are held back once
+       they have navigated away, because by then the field may hold something they have started
+       typing and wiping it would destroy their work. */
+    if (check === keyCheckSeq) {
+      keyFeedback = message;
+      if (stored) el.keyInput.value = "";
+    }
+  } finally {
+    keyChecking = false;
+    render();
   }
-
-  keyChecking = false;
-  /* A key that passed the check is stored whether or not the visitor is still watching — storing
-     it is what they asked for. Only the message is withheld once they have navigated away. */
-  if (check === keyCheckSeq) keyFeedback = message;
-  render();
 }
 
 /* ---- routing ---- */
@@ -1101,7 +1163,7 @@ function applyRoute({ resubmitted = false } = {}) {
   state.query = route.query;
 
   if (route.view === "results") {
-    if (queryChanged || resubmitted) void runSearch();
+    if (queryChanged || resubmitted) startSearch();
     else render();
     return;
   }
@@ -1164,7 +1226,13 @@ function start() {
 
   el.keyForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    void saveKey(el.keyInput.value.trim());
+    saveKey(el.keyInput.value.trim()).catch((error) => {
+      /* saveKey's own finally has already re-enabled the buttons; this replaces the stale
+         "Checking that key…" line so the visitor is not left watching a check that has died. */
+      console.error(error);
+      keyFeedback = "Something went wrong checking that key. Try again.";
+      render();
+    });
   });
 
   el.keyClear.addEventListener("click", () => {

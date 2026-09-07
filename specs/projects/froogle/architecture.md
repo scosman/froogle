@@ -76,11 +76,19 @@ legacyRedirect(search, hash) -> string | null // as legacyTarget, but an existin
 parseQuery(raw) -> { query, filters: { site?, published_after?, published_before? } }
 buildRequestBody(parsed) -> object            // adds mode, max_results, snippet_max_length
 
+// The request, as data. The one security-relevant decision in the client — which credential goes
+// to which host — is therefore a pure function under test rather than a branch inside a fetch
+// call: X-API-Key is attached in direct mode only, so a key can never travel to the proxy. The
+// endpoints are parameters because they are declared above the core marker. Throws on any mode
+// but "direct" or "shared", rather than treating an unknown one as the proxy.
+searchRequest({ mode, key, body, directUrl, proxyPath }) -> { url, options }
+
 // Mode selection.
 resolveKey(configKey, stored)  -> string | null
 selectMode({ key, protocol, proxyKnownBad, proxyPath }) -> "direct" | "shared" | "nokey"
 
-// Result presentation.
+// Result presentation. The response body is remote JSON and is treated as hostile.
+resultsFrom(payload)    -> SearchResult[]     // [] unless it is an object holding an array
 pickSnippet(result)     -> string             // snippet || description || ""
 normalizeSnippet(text)  -> string             // collapse whitespace, trim
 isLinkableUrl(url)      -> boolean            // http: / https: only
@@ -92,6 +100,10 @@ formatDate(iso)         -> string | null
 escapeXml(text) -> string
 errorMessage({ status, mode, engineName }) -> { text, action }   // action: null | "settings"
 modeIndicator(mode, engineName)           -> { text, action }
+
+// Settings: what a validation search's outcome means for a pasted key, given the shape the client
+// returns — { results } on success, { status } on failure.
+keyCheckResult(outcome) -> { save, text }
 ```
 
 `SEARCH_ENGINE_NAME` is a documented configuration option, so a renamed instance must read
@@ -134,9 +146,13 @@ response whose captured seq is stale is discarded without rendering. The in-flig
 aborted via `AbortController`, so the stale response usually never arrives — the seq check covers
 the window where it is already decoded. Both together, because either alone leaves a gap.
 
-**Timeout.** 15s via `AbortSignal.timeout(15000)`, with a manual `AbortController` fallback for
-older browsers. Timeouts surface as the generic "took too long" message, distinguished from a user
-abort by whether a newer search has started.
+**Timeout.** 15s, and the *same* `AbortController` that serves the race abort above serves it: a
+`setTimeout` calls `controller.abort()` and sets a `timedOut` flag. Not `AbortSignal.timeout`,
+which would need composing with the race abort through `AbortSignal.any` — newer than either, and
+so a second fallback path to write. One controller needs no fallback at all, and the flag tells the
+two abort causes apart exactly, rather than by sniffing an error's name. Timeouts surface as their
+own `"timeout"` status and the "took too long" message; a supersede abort is discarded by the seq
+check before its status is ever read.
 
 **Proxy unavailability.** In shared mode, a response that is 404/405, or whose body is not JSON, or
 which fails at the network level, marks `sessionStorage["froogle.proxyUnavailable"] = "1"` and
@@ -249,7 +265,9 @@ to `{ status, mode }`, which `errorMessage` maps to display text. Status codes:
 | 402 | Out of credits (direct) | No, from the app's side |
 | 429 | Rate limit, either tier | Yes — wait, or add a key |
 | 5xx | Keenable or proxy | Yes — retry |
-| `0` | Network failure, timeout, CORS block | Yes — retry |
+| `0` | Network failure, CORS block, unparseable body | Yes — retry |
+| `"timeout"` | The 15s abort fired | Yes — retry |
+| `"nokey"` | No key and no proxy | Yes — add a key |
 
 Status `0` is the app's internal marker for "no HTTP response was readable", which is what a
 `fetch` rejection gives us. The distinction matters: a CORS failure and a dropped connection are
@@ -292,6 +310,9 @@ Cases:
 * `resolveKey` — config key wins over stored; whitespace-only treated as absent.
 * `isLinkableUrl` — rejects `javascript:`, `data:`, `vbscript:`, `file:`, and malformed input;
   accepts http and https.
+* `resultsFrom` — a well-formed payload passes through in order; a missing, null or non-array
+  `results` and a non-object payload each yield `[]`; null and primitive entries are dropped, as is
+  an entry with neither a title nor a URL.
 * `pickSnippet` / `normalizeSnippet` — falls back to `description`; both absent yields `""`;
   newlines and runs of whitespace collapse.
 * `formatDate` — valid ISO, absent, and unparseable.
@@ -300,6 +321,12 @@ Cases:
 * `escapeXml` — the five characters that would break the inline SVG favicon.
 * `buildRequestBody` — always sets `mode`, `max_results`, `snippet_max_length`; includes filters
   only when present.
+* `searchRequest` — direct mode targets Keenable and carries `X-API-Key`; shared mode targets the
+  relative proxy path and carries none; both are a `POST` with JSON content-type and accept
+  headers, `credentials: "omit"`, and a body that round-trips to what `buildRequestBody` produced;
+  any other mode throws.
+* `keyCheckResult` — success saves; 401 and 403 refuse; 402 saves with the out-of-credits note;
+  every other status saves with the unverified note; no message leaks a raw status code.
 
 ### `test/proxy.test.mjs`
 
