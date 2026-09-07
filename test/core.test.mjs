@@ -22,11 +22,12 @@ const INDEX_PATH = fileURLToPath(new URL("../index.html", import.meta.url));
 
 const EXPORTED = [
   "MAX_RESULTS", "SNIPPET_MAX_LENGTH",
-  "parseQuery", "buildRequestBody",
+  "parseQuery", "buildRequestBody", "searchRequest",
   "parseRoute", "formatRoute", "legacyTarget", "legacyRedirect",
   "resolveKey", "selectMode",
-  "resultTitle", "pickSnippet", "normalizeSnippet", "isLinkableUrl", "displayUrl", "formatDate",
-  "escapeXml", "errorMessage", "modeIndicator",
+  "resultsFrom", "resultTitle", "pickSnippet", "normalizeSnippet", "isLinkableUrl", "displayUrl",
+  "formatDate",
+  "escapeXml", "errorMessage", "keyCheckResult", "modeIndicator",
   "resolveEngineName", "DEFAULT_ENGINE_NAME",
 ];
 
@@ -173,6 +174,64 @@ test("buildRequestBody includes filters only when present", () => {
   assert.equal(body.site, "example.com");
   assert.equal(body.published_after, "2026-01-01");
   assert.equal("published_before" in body, false);
+});
+
+/* ---- searchRequest ---- */
+
+const DIRECT_URL = "https://api.keenable.ai/v1/search";
+const PROXY_PATH = "/api/search";
+
+function requestFor(mode, key, body = { query: "cats" }) {
+  return toHost(core.searchRequest({ mode, key, body, directUrl: DIRECT_URL, proxyPath: PROXY_PATH }));
+}
+
+test("searchRequest sends the key to Keenable in direct mode", () => {
+  const { url, options } = requestFor("direct", "keen_abc");
+  assert.equal(url, DIRECT_URL);
+  assert.equal(options.method, "POST");
+  assert.deepEqual(options.headers, {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "X-API-Key": "keen_abc",
+  });
+});
+
+test("searchRequest never attaches a key to the proxy call", () => {
+  // The proxy is same-origin and carries the operator's credential server-side; a visitor's key
+  // has no business travelling there.
+  const { url, options } = requestFor("shared", "keen_abc");
+  assert.equal(url, PROXY_PATH);
+  assert.equal("X-API-Key" in options.headers, false);
+  assert.deepEqual(options.headers, {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  });
+});
+
+test("searchRequest never lets a search carry cookies", () => {
+  // Keenable answers with Access-Control-Allow-Credentials: true, so this is stated, not assumed.
+  for (const mode of ["direct", "shared"]) {
+    assert.equal(requestFor(mode, "keen_abc").options.credentials, "omit");
+    assert.equal(requestFor(mode, "keen_abc").options.referrerPolicy, "no-referrer");
+  }
+});
+
+test("searchRequest serializes the request body unchanged", () => {
+  const body = core.buildRequestBody(core.parseQuery("rust site:docs.rs after:2026-01-01"));
+  const sent = JSON.parse(requestFor("direct", "keen_abc", body).options.body);
+  assert.deepEqual(sent, {
+    query: "rust",
+    mode: "pro",
+    max_results: core.MAX_RESULTS,
+    snippet_max_length: core.SNIPPET_MAX_LENGTH,
+    site: "docs.rs",
+    published_after: "2026-01-01",
+  });
+});
+
+test("searchRequest tolerates a missing key rather than sending undefined", () => {
+  assert.equal(requestFor("direct", undefined).options.headers["X-API-Key"], "");
+  assert.equal(toHost(core.searchRequest()).options.headers["X-API-Key"], undefined);
 });
 
 /* ---- routing ---- */
@@ -394,6 +453,42 @@ test("resultTitle prefers the title, then the hostname, then the raw url", () =>
   assert.equal(core.resultTitle({}), "");
 });
 
+test("resultsFrom passes a well-formed payload through in order", () => {
+  const payload = {
+    query: "cats",
+    results: [
+      { title: "One", url: "https://a.example/1" },
+      { title: "Two", url: "https://b.example/2" },
+    ],
+  };
+  assert.deepEqual(toHost(core.resultsFrom(payload)).map((r) => r.title), ["One", "Two"]);
+});
+
+test("resultsFrom yields an empty list for anything that is not a results array", () => {
+  for (const payload of [undefined, null, "results", 7, {}, { results: null },
+                         { results: "one" }, { results: { 0: {} } }]) {
+    assert.deepEqual(toHost(core.resultsFrom(payload)), [],
+      `expected [] for ${JSON.stringify(payload)}`);
+  }
+});
+
+test("resultsFrom drops entries with nothing to draw", () => {
+  const kept = toHost(core.resultsFrom({
+    results: [
+      null,
+      "a string",
+      {},
+      { title: "   ", url: "" },
+      { url: "https://only-a-url.example/x" },
+      { title: "Only a title" },
+    ],
+  }));
+  assert.deepEqual(kept, [
+    { url: "https://only-a-url.example/x" },
+    { title: "Only a title" },
+  ]);
+});
+
 test("pickSnippet prefers snippet and falls back to description", () => {
   assert.equal(core.pickSnippet({ snippet: "s", description: "d" }), "s");
   assert.equal(core.pickSnippet({ description: "d" }), "d");
@@ -477,10 +572,9 @@ test("errorMessage gives one generic message for 5xx and network failure", () =>
   }
 });
 
-test("errorMessage carries the phase-1 placeholder for an unwired search", () => {
-  // Phase 2 deletes this along with the branch it covers.
-  assert.match(messageFor("unwired", "direct").text, /not wired up yet/);
-  assert.equal(messageFor("unwired", "shared").action, null);
+test("errorMessage no longer knows about an unwired search", () => {
+  // Phase 2 wired it up and deleted the placeholder branch; an unknown status is now generic.
+  assert.equal(messageFor("unwired", "direct").text, messageFor(500, "direct").text);
 });
 
 test("errorMessage handles the timeout and no-key sentinels", () => {
@@ -500,7 +594,7 @@ test("errorMessage names the configured engine, and falls back to the default na
 
 test("errorMessage never leaks a raw status code or an empty message", () => {
   const statuses = [0, 400, 401, 402, 403, 404, 429, 500, 503,
-                    "timeout", "nokey", "unwired", undefined];
+                    "timeout", "nokey", undefined];
   for (const status of statuses) {
     for (const mode of ["direct", "shared", "nokey"]) {
       const { text, action } = messageFor(status, mode);
@@ -510,6 +604,54 @@ test("errorMessage never leaks a raw status code or an empty message", () => {
     }
   }
   assert.deepEqual(toHost(core.errorMessage()), toHost(messageFor(undefined, undefined)));
+});
+
+/* ---- keyCheckResult ---- */
+
+test("keyCheckResult saves a key that searched successfully", () => {
+  assert.deepEqual(toHost(core.keyCheckResult({ results: [] })), {
+    save: true,
+    text: "Key saved.",
+  });
+  assert.equal(core.keyCheckResult({ results: [{ title: "One" }] }).save, true);
+});
+
+test("keyCheckResult refuses to save a key Keenable rejected", () => {
+  for (const status of [401, 403]) {
+    const { save, text } = toHost(core.keyCheckResult({ status }));
+    assert.equal(save, false, `expected ${status} to block the save`);
+    assert.match(text, /rejected that key/);
+    assert.match(text, /nothing was saved/);
+  }
+});
+
+test("keyCheckResult saves an authenticated key that has no credits, and says so", () => {
+  const { save, text } = toHost(core.keyCheckResult({ status: 402 }));
+  assert.equal(save, true);
+  assert.match(text, /out of credits/);
+});
+
+test("keyCheckResult saves an unverified key when the check itself failed", () => {
+  // A 429, a 5xx, a dropped connection and a timeout say nothing about the key. Refusing the save
+  // because Keenable was briefly unreachable would strand the visitor, and saying the check did
+  // not complete is the opposite of saving a bad key silently.
+  for (const status of [0, 400, 404, 429, 500, 503, "timeout"]) {
+    const { save, text } = toHost(core.keyCheckResult({ status }));
+    assert.equal(save, true, `expected ${status} to still save`);
+    assert.match(text, /could not be checked/);
+  }
+});
+
+test("keyCheckResult always returns a plain message that leaks no status code", () => {
+  const outcomes = [{ results: [] }, { status: 401 }, { status: 402 }, { status: 429 },
+                    { status: 0 }, { status: "timeout" }, {}, undefined, null];
+  for (const outcome of outcomes) {
+    const { save, text } = toHost(core.keyCheckResult(outcome));
+    assert.equal(typeof save, "boolean");
+    assert.ok(text.length > 8, `message for ${JSON.stringify(outcome)} is too short`);
+    assert.doesNotMatch(text, /\b[45]\d\d\b/,
+      `message for ${JSON.stringify(outcome)} leaks a code`);
+  }
 });
 
 test("modeIndicator describes each mode and only prompts for a key when there is none", () => {

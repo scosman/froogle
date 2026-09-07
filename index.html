@@ -435,6 +435,30 @@ function buildRequestBody(parsed) {
   };
 }
 
+/* The whole request, as data, so the one security-relevant decision in the client — which
+   credential goes to which host — is a pure function with a test rather than a branch buried in a
+   fetch call. The key is attached in direct mode only and so can never travel to the proxy.
+
+   The endpoints are parameters because they are declared outside this region, alongside the rest
+   of the configuration a self-hoster edits. */
+function searchRequest({ mode, key, body, directUrl, proxyPath } = {}) {
+  const direct = mode === "direct";
+  const headers = { "Content-Type": "application/json", "Accept": "application/json" };
+  if (direct) headers["X-API-Key"] = String(key ?? "");
+  return {
+    url: direct ? directUrl : proxyPath,
+    options: {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      /* Keenable answers with Access-Control-Allow-Credentials: true, so this is stated rather
+         than left to the default: a search has no business carrying cookies. */
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+    },
+  };
+}
+
 function decodeFragment(value) {
   try {
     return decodeURIComponent(value);
@@ -524,6 +548,15 @@ function resultTitle(result) {
   }
 }
 
+/* The response body is remote JSON and is treated as hostile. Anything that is not an object
+   carrying an array yields an empty list rather than throwing into the render path, and an entry
+   with neither a title nor a URL is dropped instead of drawing a blank row. */
+function resultsFrom(payload) {
+  const results = payload && typeof payload === "object" ? payload.results : null;
+  if (!Array.isArray(results)) return [];
+  return results.filter((result) => result && typeof result === "object" && resultTitle(result));
+}
+
 /* Keenable's sources disagree about which text field is populated, so both are handled. */
 function pickSnippet(result) {
   const snippet = typeof result?.snippet === "string" ? result.snippet : "";
@@ -589,10 +622,6 @@ function errorMessage({ status, mode, engineName } = {}) {
   if (status === "timeout") {
     return { text: "That search took too long. Try again.", action: null };
   }
-  /* Phase 1 ships the shell only. Phase 2 replaces runSearch and deletes this branch. */
-  if (status === "unwired") {
-    return { text: "Search is not wired up yet — this build is the interface only.", action: null };
-  }
   if (status === 429) {
     return shared
       ? { text: name + "'s shared allowance is busy right now. Wait a moment, or add your own "
@@ -613,6 +642,27 @@ function errorMessage({ status, mode, engineName } = {}) {
     };
   }
   return { text: "Search is unavailable right now. Try again.", action: null };
+}
+
+/* What a validation search says about a pasted key, given the outcome shape the client returns:
+   `{ results }` on success, `{ status }` on failure.
+
+   Only 401 and 403 prove the key is bad, and only those refuse the save. A 429, a 5xx or a dropped
+   connection says nothing about the key at all, and refusing to store one because Keenable was
+   briefly unreachable would strand the visitor — so those save and say plainly that the check did
+   not complete, which is the opposite of silently saving a bad key. A 402 authenticated
+   successfully; the account is simply empty, which the visitor needs to know but which does not
+   make the key wrong. */
+function keyCheckResult(outcome) {
+  const status = outcome && typeof outcome === "object" ? outcome.status : undefined;
+  if (status === undefined) return { save: true, text: "Key saved." };
+  if (status === 401 || status === 403) {
+    return { save: false, text: "Keenable rejected that key, so nothing was saved." };
+  }
+  if (status === 402) {
+    return { save: true, text: "Key saved, but this Keenable account is out of credits." };
+  }
+  return { save: true, text: "Key saved, but it could not be checked just now." };
 }
 
 function modeIndicator(mode, engineName) {
@@ -663,9 +713,11 @@ const el = {
   resultsInput: document.getElementById("results-input"),
   resultsSubmit: document.getElementById("results-submit"),
   notice: document.getElementById("notice"),
+  resultList: document.getElementById("results"),
   modeNote: document.getElementById("mode-note"),
   keyForm: document.getElementById("key-form"),
   keyInput: document.getElementById("key-input"),
+  keySave: document.getElementById("key-save"),
   keyClear: document.getElementById("key-clear"),
   keyState: document.getElementById("key-state"),
   favicon: document.getElementById("favicon"),
@@ -706,17 +758,31 @@ function removeStore(store, key) {
    navigation clears it. */
 let previousView = null;
 let keyFeedback = "";
+let keyChecking = false;
+/* Bumped by each save attempt and by every navigation, so a slow validation cannot surface its
+   message after the visitor has moved on. The key itself is still stored — that part was asked
+   for; only the feedback is stale. */
+let keyCheckSeq = 0;
 
 const storedKey = () => readStore(localStorage, STORAGE_KEY);
 const proxyKnownBad = () => readStore(sessionStorage, PROXY_UNAVAILABLE_KEY) === "1";
 
-function currentMode() {
-  return selectMode({
-    key: resolveKey(API_KEY, storedKey()),
+const currentKey = () => resolveKey(API_KEY, storedKey());
+
+/* The key is a parameter so a caller that has already resolved it — the search path, which needs
+   the key itself for the header — cannot end up deciding the mode from a different answer than
+   the one it sends. */
+function currentMode(key = currentKey()) {
+  const mode = selectMode({
+    key,
     protocol: location.protocol,
     proxyKnownBad: proxyKnownBad(),
     proxyPath: PROXY_PATH,
   });
+  /* Phase 2 ships direct mode only: there is no proxy client yet, so a keyless visitor genuinely
+     has no way to search and the whole page should say so. Phase 3 adds the proxy request and
+     deletes this line. */
+  return mode === "shared" ? "nokey" : mode;
 }
 
 /* ---- rendering ---- */
@@ -764,6 +830,56 @@ function renderNotice() {
   fillMessage(notice, errorMessage({ ...state.error, engineName: ENGINE_NAME }));
 }
 
+/* Every result is remote, attacker-controllable text. It reaches the page as text nodes only —
+   `innerHTML` appears nowhere in this file, so every view's markup is either authored here in
+   HTML or built element by element — and a URL becomes an href only after isLinkableUrl has
+   parsed it and found http: or https:, which is what keeps javascript:, data: and vbscript: out
+   of the document. */
+function resultItem(result) {
+  const item = document.createElement("li");
+  const url = typeof result.url === "string" ? result.url : "";
+  const linkable = isLinkableUrl(url);
+
+  const title = document.createElement(linkable ? "a" : "span");
+  title.className = linkable ? "result-title" : "result-title-plain";
+  title.textContent = resultTitle(result);
+  if (linkable) {
+    title.href = url;
+    title.rel = "noopener noreferrer";
+  }
+  item.appendChild(title);
+
+  if (url) {
+    const line = document.createElement("div");
+    line.className = "result-url";
+    line.textContent = displayUrl(url);
+    item.appendChild(line);
+  }
+
+  const date = formatDate(result.published_at);
+  const snippet = normalizeSnippet(pickSnippet(result));
+  if (date || snippet) {
+    const paragraph = document.createElement("p");
+    paragraph.className = "result-snippet";
+    if (date) {
+      const stamp = document.createElement("span");
+      stamp.className = "result-date";
+      stamp.textContent = snippet ? date + " — " : date;
+      paragraph.appendChild(stamp);
+    }
+    if (snippet) paragraph.appendChild(document.createTextNode(snippet));
+    item.appendChild(paragraph);
+  }
+
+  return item;
+}
+
+function renderResults() {
+  clear(el.resultList);
+  if (state.status !== "ok") return;
+  for (const result of state.results) el.resultList.appendChild(resultItem(result));
+}
+
 /* The mode line is the link when there is no key, rather than growing a second "Open settings"
    next to the Settings link the footer already carries. */
 function renderFooter() {
@@ -786,7 +902,11 @@ function keyStateText() {
     : "No key set — searches use " + ENGINE_NAME + "'s shared allowance.";
 }
 
+/* Clear is disabled alongside Save so a check cannot land after the visitor has asked for the key
+   to be removed and quietly write it back. */
 function renderKeyState() {
+  el.keySave.disabled = keyChecking;
+  el.keyClear.disabled = keyChecking;
   el.keyState.textContent = keyFeedback ? keyFeedback + " " + keyStateText() : keyStateText();
 }
 
@@ -802,6 +922,7 @@ function render() {
     : ENGINE_NAME;
 
   renderNotice();
+  renderResults();
   renderFooter();
   renderKeyState();
 
@@ -810,11 +931,147 @@ function render() {
 
 /* ---- search ---- */
 
-/* Phase 1 has no API client. Phase 2 replaces this whole function. */
-function runSearch() {
-  state.status = "error";
+const KEENABLE_SEARCH_URL = "https://api.keenable.ai/v1/search";
+const REQUEST_TIMEOUT_MS = 15000;
+
+/* The cheapest real search that still proves a key works. Keenable has no browser-reachable
+   key-check endpoint, so validation is a search — and one result with the smallest documented
+   snippet is as small as a search gets. */
+const KEY_CHECK_BODY = { query: "test", mode: "pro", max_results: 1, snippet_max_length: 180 };
+
+/* The controller for the request currently in flight, so a new search can abort the old one. */
+let inFlight = null;
+
+/* One request, one timeout, one place where any failure becomes a `{ status }` pair. Nothing
+   throws out of here, so the render path never has to handle an exception.
+
+   A single AbortController serves both the timeout and the supersede abort, rather than composing
+   AbortSignal.timeout with a second signal: AbortSignal.any is newer than either, and one
+   controller needs no fallback for older browsers and tells the two abort causes apart with a
+   flag rather than by sniffing error names. */
+async function requestSearch(body, { mode, key, controller = new AbortController() } = {}) {
+  const { url, options } = searchRequest({
+    mode,
+    key,
+    body,
+    directUrl: KEENABLE_SEARCH_URL,
+    proxyPath: PROXY_PATH,
+  });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    if (!response.ok) return { status: response.status };
+    return { results: resultsFrom(await response.json()) };
+  } catch {
+    /* A network drop, a CORS block, a DNS failure and a body that will not parse are all one
+       thing to fetch: no readable HTTP response. Status 0 is the app's marker for that. */
+    return { status: timedOut ? "timeout" : 0 };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* Stops a response that is still in the air from writing into a view that has moved on. Both
+   halves are needed: the abort closes the window before the response arrives, and the sequence
+   bump closes the window after it has already been decoded. */
+function cancelSearch() {
+  state.seq += 1;
+  if (inFlight) inFlight.abort();
+  inFlight = null;
+}
+
+async function runSearch() {
+  const key = currentKey();
+  const mode = currentMode(key);
+  cancelSearch();
+  const seq = state.seq;
+
+  const fail = (status) => {
+    state.status = "error";
+    state.results = [];
+    state.error = { status, mode };
+    render();
+  };
+
+  if (mode === "nokey") {
+    fail("nokey");
+    return;
+  }
+
+  const parsed = parseQuery(state.query);
+  /* Filters with no terms left to search — "site:example.com" on its own. Keenable requires a
+     query and would answer 400, so the app answers with the same message rather than spending a
+     request to be told what it already knows. */
+  if (!parsed.query) {
+    fail(400);
+    return;
+  }
+
+  state.status = "searching";
   state.results = [];
-  state.error = { status: "unwired", mode: currentMode() };
+  state.error = null;
+  render();
+
+  const controller = new AbortController();
+  inFlight = controller;
+  const outcome = await requestSearch(buildRequestBody(parsed), { mode, key, controller });
+
+  /* A newer search has started, or the visitor has left the results view. Either way this answer
+     is to a question nobody is asking any more. */
+  if (seq !== state.seq) return;
+  inFlight = null;
+
+  if (outcome.status !== undefined) {
+    fail(outcome.status);
+    return;
+  }
+  state.results = outcome.results;
+  state.status = outcome.results.length ? "ok" : "empty";
+  state.error = null;
+  render();
+}
+
+/* ---- settings ---- */
+
+/* A pasted key is checked against Keenable with a real search before it is stored, so a mistyped
+   one is rejected here rather than at the next search. */
+async function saveKey(key) {
+  /* Both buttons are disabled while a check runs, but a disabled submit button does not reliably
+     suppress implicit submission from the field itself. */
+  if (keyChecking) return;
+  if (!key) {
+    keyFeedback = "Enter a key to save, or use Clear to remove the saved one.";
+    render();
+    return;
+  }
+
+  const check = (keyCheckSeq += 1);
+  keyChecking = true;
+  keyFeedback = "Checking that key with Keenable…";
+  render();
+
+  const { save, text } = keyCheckResult(await requestSearch(KEY_CHECK_BODY, {
+    mode: "direct",
+    key,
+  }));
+  let message = text;
+  if (save) {
+    if (writeStore(localStorage, STORAGE_KEY, key)) {
+      el.keyInput.value = "";
+    } else {
+      message = "This browser is blocking storage, so the key cannot be saved. Private "
+        + "browsing mode is the usual cause.";
+    }
+  }
+
+  keyChecking = false;
+  /* A key that passed the check is stored whether or not the visitor is still watching — storing
+     it is what they asked for. Only the message is withheld once they have navigated away. */
+  if (check === keyCheckSeq) keyFeedback = message;
   render();
 }
 
@@ -837,16 +1094,18 @@ function normalizeLegacyUrl() {
    no hashchange but should still run the search again. */
 function applyRoute({ resubmitted = false } = {}) {
   keyFeedback = "";
+  keyCheckSeq += 1;
   const route = parseRoute(location.hash, location.search);
   const queryChanged = route.query !== state.query;
   state.view = route.view;
   state.query = route.query;
 
   if (route.view === "results") {
-    if (queryChanged || resubmitted) runSearch();
+    if (queryChanged || resubmitted) void runSearch();
     else render();
     return;
   }
+  cancelSearch();
   state.status = "idle";
   state.results = [];
   state.error = null;
@@ -905,17 +1164,7 @@ function start() {
 
   el.keyForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    const key = el.keyInput.value.trim();
-    if (!key) {
-      keyFeedback = "Enter a key to save, or use Clear to remove the saved one.";
-    } else if (!writeStore(localStorage, STORAGE_KEY, key)) {
-      keyFeedback = "This browser is blocking storage, so the key cannot be saved. Private "
-        + "browsing mode is the usual cause.";
-    } else {
-      keyFeedback = "Key saved.";
-      el.keyInput.value = "";
-    }
-    render();
+    void saveKey(el.keyInput.value.trim());
   });
 
   el.keyClear.addEventListener("click", () => {
