@@ -8,7 +8,7 @@ Three phases. Each ends with a working, reviewable artifact and its tests passin
 
 ## Phases
 
-- [ ] **Phase 1: Shell.** `index.html` end to end with no network: design tokens and layout,
+- [x] **Phase 1: Shell.** `index.html` end to end with no network: design tokens and layout,
       the four views, fragment routing with legacy `?q=` normalization, the core pure functions
       (`parseRoute`, `formatRoute`, `legacyTarget`, `parseQuery`, `selectMode`, `resolveKey`,
       presentation helpers, `errorMessage`), key storage with `try/catch` guards, the settings
