@@ -197,10 +197,12 @@ X-API-Key: <key>          (direct mode only)
   even though the API accepts it and both official SDKs send it; it is unpromised, so the client
   must not break if it is ever rejected.
 * `max_results` is set to 25. Documented range is 1-50, default 10; measured working at 25.
-* `snippet_max_length` caps the returned page text. Documented range 180-10000; outside it the API
-  returns 400. Snippets otherwise run ~2,000 characters each, which at 25 results is tens of
-  kilobytes of prose to render two lines apiece, so this is a real payload saving. The UI truncates
-  regardless, since the cap appears to be approximate.
+* `snippet_max_length` is set to 400. Documented range 180-10000; outside it the API returns 400.
+  It is a **soft target that rounds to a content boundary**, not a hard cap: requesting 180
+  returned 136-294 characters, requesting 400 returned 385-498. Two clamped lines need ~180
+  visible characters, so 400 keeps every snippet full even at the low end, while cutting the
+  payload from ~50KB to ~10KB across 25 results against the ~2,000-character default. The UI
+  truncates independently, because the cap is approximate in both directions.
 * `credentials` is never set to `"include"`. Keenable returns
   `Access-Control-Allow-Credentials: true`, and there is no reason to attach cookies to a search.
 * Requests are aborted after 15 seconds via `AbortSignal`.
@@ -303,10 +305,6 @@ countdown is possible in direct mode; a limit is discoverable only when a 429 ar
 
 ## Open items
 
-* **Exact `snippet_max_length` behavior.** The bounds (180-10000) are measured, but a value of
-  2000 returned snippets of 2025-2073 characters, identical to the uncapped baseline. Whether the
-  cap truncates at all, or merely rounds out to a sentence boundary, is being confirmed. The UI
-  truncates independently either way; only the payload saving is at stake.
 * **`query_time`** is a documented point-in-time search parameter: it excludes pages acquired after
   a given instant. Not used in v1, but a natural fit for a later "search the web as it was"
   feature.

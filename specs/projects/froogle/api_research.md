@@ -204,11 +204,14 @@ access-control-expose-headers: Content-Type,Authorization,X-Request-Id
   merely inferred from the allow-headers list.
 * A typical query returns **10 results** on the keyless endpoint.
 
+`snippet_max_length` is a **soft target**, not a hard cap: it rounds to a content boundary and
+overshoots or undershoots by roughly half. Measured: requesting 180 returned 136/216/294
+characters; requesting 400 returned 385/430/498. The ~2,000-character default is what an omitted
+value produces.
+
 ### Still open
 
-* Exact `snippet_max_length` behavior: bounds are documented and enforced, but a request for 2000
-  returned 2025-2073 character snippets, matching the uncapped baseline. Whether it truncates or
-  merely rounds out to a boundary is unconfirmed. Only payload size is at stake.
+Nothing blocking. The API contract is fully characterized for v1.
 
 ### The MCP endpoint is not a way around this
 
