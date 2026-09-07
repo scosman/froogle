@@ -102,7 +102,6 @@ key prompt.
 |---|---|---|
 | `KEENABLE_API_KEY` | unset | Operator's key, used when keyless fails |
 | `UNAUTHENTICATED_FIRST` | `true` | Try keyless before the key |
-| `RATE_LIMIT_PER_MINUTE` | `10` | Per-IP cap |
 
 ## Views and routing
 
@@ -245,18 +244,20 @@ no icons, no images of any kind.
 published_before, acquired_after, acquired_before }`, allowlisting those fields and rejecting
 anything else, then:
 
-1. Applies a per-IP rate limit (`RATE_LIMIT_PER_MINUTE`, default 10) using a token bucket in the
-   Cache API, keyed on `CF-Connecting-IP`. Over the limit returns 429.
-2. If `UNAUTHENTICATED_FIRST`, calls `POST /v1/search/public` with
+1. If `UNAUTHENTICATED_FIRST`, calls `POST /v1/search/public` with
    `X-Keenable-Title: <SEARCH_ENGINE_NAME>`.
-3. On 401, 402, 429, or 5xx, retries once against `POST /v1/search` with `KEENABLE_API_KEY`.
+2. On 401, 402, 429, or 5xx, retries once against `POST /v1/search` with `KEENABLE_API_KEY`.
    A 400 is **not** retried: a bad query fails identically on both tiers, so retrying only burns
    quota.
-4. If `UNAUTHENTICATED_FIRST` is false, the order is reversed.
-5. Returns Keenable's JSON body and status unchanged.
+3. If `UNAUTHENTICATED_FIRST` is false, the order is reversed.
+4. Returns Keenable's JSON body and status unchanged.
 
-It logs nothing and stores nothing beyond the rate-limit counters, which hold a request count
-against a hashed IP and expire within the minute.
+The retry against the key only happens when `KEENABLE_API_KEY` is set. Without one the proxy is
+keyless-only and passes the upstream response straight through, a 429 included.
+
+It logs nothing and stores nothing — no counters, no per-visitor state of any kind. An operator
+running a public instance is expected to put a platform rate-limiting rule (a Cloudflare Rate
+Limiting rule, or the equivalent on another host) in front of it.
 
 Keenable sees the proxy's egress IP, not the visitor's, so the keyless allowance is consumed per
 Cloudflare egress IP and shared with other traffic from that IP. The fallback to the operator's key

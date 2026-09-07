@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'self' https://api.keenable.ai; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Froogle</title>
+<link id="favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext x='16' y='25' font-family='Georgia,serif' font-size='27' text-anchor='middle' fill='%23202020'%3EF%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #fcfcfa;
+  --ink: #202020;
+  --ink-soft: #5f5b54;
+  --url: #2d6a4f;
+  --ink-faint: #8a857c;
+  --link: #1a3fb0;
+  --link-visited: #6b2fa0;
+  --notice: #8a4b1f;
+  --focus: #1a3fb0;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --serif: Georgia, "Times New Roman", serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html { background: var(--bg); }
+
+body {
+  margin: 0 auto;
+  max-width: 640px;
+  padding: 0 16px 40px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 var(--sans);
+}
+
+a { color: var(--link); }
+a:visited { color: var(--link-visited); }
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- wordmark ---- */
+
+.wordmark {
+  display: inline-block;
+  font-family: var(--serif);
+  font-weight: normal;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  text-decoration: none;
+}
+.wordmark:visited { color: var(--ink); }
+.wordmark-large { font-size: 44px; margin: 0 0 24px; }
+.wordmark-small { font-size: 22px; line-height: 1; }
+
+/* ---- search form ---- */
+
+.search-form { display: flex; gap: 8px; }
+
+.search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ink-faint);
+  border-radius: 2px;
+  background: #ffffff;
+  color: var(--ink);
+  font: 15px/1.5 var(--sans);
+}
+.search-input::placeholder { color: var(--ink-faint); }
+
+button {
+  padding: 8px 16px;
+  border: 1px solid var(--ink-faint);
+  border-radius: 2px;
+  background: #f1efe9;
+  color: var(--ink);
+  font: 15px/1.5 var(--sans);
+  cursor: pointer;
+}
+button:hover { background: #e8e5dd; }
+button[disabled] { color: var(--ink-soft); cursor: default; }
+
+/* ---- home ---- */
+
+.home { padding-top: 22vh; text-align: center; }
+.home .search-form { max-width: 480px; margin: 0 auto; text-align: left; }
+
+/* ---- results ---- */
+
+.results-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0 12px;
+}
+.results-header .search-form { flex: 1 1 auto; }
+
+.rule {
+  border: 0;
+  border-top: 1px solid var(--ink-faint);
+  margin: 0 0 24px;
+}
+
+.results { list-style: none; margin: 0; padding: 0; }
+.results li { margin: 0 0 24px; }
+
+.result-title { font-size: 15px; text-decoration: underline; }
+.result-title-plain { font-size: 15px; color: var(--ink); }
+
+.result-url {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--url);
+  word-break: break-all;
+}
+
+.result-snippet {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  max-height: 3.1em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.result-date { color: var(--ink-soft); }
+
+/* ---- notice ---- */
+
+.notice { margin: 0 0 24px; color: var(--ink-soft); }
+.notice-alert { color: var(--notice); }
+.notice a { color: inherit; }
+
+/* ---- prose views ---- */
+
+.prose { padding-top: 24px; }
+.prose h1 { font-size: 22px; font-family: var(--serif); font-weight: normal; margin: 0 0 24px; }
+.prose h2 { font-size: 15px; font-weight: bold; margin: 24px 0 8px; }
+.prose p { margin: 0 0 16px; }
+.prose ul { margin: 0 0 16px; padding-left: 24px; }
+.prose li { margin-bottom: 8px; }
+
+/* ---- settings ---- */
+
+.key-form { margin: 0 0 16px; }
+.key-form label { display: block; margin-bottom: 4px; }
+.key-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--ink-faint);
+  border-radius: 2px;
+  background: #ffffff;
+  color: var(--ink);
+  font: 15px/1.5 var(--sans);
+}
+.key-buttons { display: flex; gap: 8px; margin-top: 12px; }
+.key-state { color: var(--ink-soft); font-size: 13px; }
+
+/* ---- footer ---- */
+
+.site-footer {
+  margin-top: 40px;
+  padding-top: 16px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.site-footer a { color: var(--ink-soft); }
+.site-footer a:visited { color: var(--ink-soft); }
+.site-footer .sep { padding: 0 8px; }
+.mode-note { display: inline-block; }
+
+@media (max-width: 479px) {
+  .home { padding-top: 12vh; }
+  .wordmark-large { font-size: 36px; }
+  .results-header { flex-direction: column; align-items: stretch; gap: 12px; }
+  .site-footer .sep { padding: 0 4px; }
+}
+</style>
+</head>
+<body>
+
+<noscript>
+  <p class="notice notice-alert" style="padding-top:24px">
+    Froogle is a single HTML page that runs entirely in your browser, so it needs JavaScript
+    enabled to search. Nothing else on this page will work without it.
+  </p>
+</noscript>
+
+<main>
+
+<!-- ---- Home ---- -->
+<section id="view-home" class="home" hidden>
+  <h1 class="wordmark wordmark-large" data-wordmark>Froogle</h1>
+  <form class="search-form" id="home-form" role="search">
+    <label class="visually-hidden" for="home-input">Search the web</label>
+    <input class="search-input" id="home-input" name="q" type="search" autocomplete="off"
+           autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Search the web">
+    <button type="submit">Search</button>
+  </form>
+</section>
+
+<!-- ---- Results ---- -->
+<section id="view-results" hidden>
+  <div class="results-header">
+    <a class="wordmark wordmark-small" href="#" data-wordmark>Froogle</a>
+    <form class="search-form" id="results-form" role="search">
+      <label class="visually-hidden" for="results-input">Search the web</label>
+      <input class="search-input" id="results-input" name="q" type="search" autocomplete="off"
+             autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button type="submit" id="results-submit">Search</button>
+    </form>
+  </div>
+  <hr class="rule">
+  <p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
+  <ul class="results" id="results"></ul>
+</section>
+
+<!-- ---- About ---- -->
+<section id="view-about" class="prose" hidden>
+  <h1 class="wordmark" data-wordmark>Froogle</h1>
+
+  <p>
+    A free web search engine that is one HTML file. No tracking, no ads, no accounts, no cookies.
+    You can save the page and run it from your own computer.
+  </p>
+
+  <h2>How it works</h2>
+  <p>
+    Results come from <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>, a web
+    search API. There are two ways your search can reach them.
+  </p>
+  <ul>
+    <li>
+      <strong>Direct.</strong> If a Keenable API key is available &mdash; one you saved in
+      <a href="#settings">Settings</a>, or one built into this copy of the page &mdash; your
+      browser calls Keenable itself. Your query never reaches a Froogle server.
+    </li>
+    <li>
+      <strong>Shared.</strong> With no key, your query passes through Froogle's own thin proxy,
+      which stores nothing and logs nothing, and forwards the search to Keenable.
+    </li>
+  </ul>
+  <p>
+    The mode in use is always shown at the bottom of every page.
+  </p>
+
+  <h2>Privacy</h2>
+  <p>
+    Froogle sets no cookies, runs no analytics, and includes no third-party code. Your query is
+    kept in the part of the address after the <code>#</code>, which browsers never send to a
+    server, so it appears in no access log, no CDN log, and no <code>Referer</code> header.
+  </p>
+  <p>
+    An API key you save is held in your browser's local storage and is sent only to Keenable.
+    Whoever hosts this page can see that the page was requested, never what was searched. Keenable
+    sees the query, and in direct mode your IP address.
+  </p>
+
+  <h2>Elsewhere</h2>
+  <p>
+    <a href="https://github.com/scosman/froogle" rel="noopener noreferrer">Source code</a>
+    &middot;
+    <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>
+  </p>
+</section>
+
+<!-- ---- Settings ---- -->
+<section id="view-settings" class="prose" hidden>
+  <h1 class="wordmark" data-wordmark>Froogle</h1>
+
+  <h2>Your own Keenable key</h2>
+  <p>
+    Without a key, searches share one allowance with everyone else using this page. With your own
+    key they go straight to Keenable from your browser &mdash; nothing touches a Froogle server,
+    and Keenable's free tier is far larger than the shared allowance.
+  </p>
+  <p>
+    Keys are free from the
+    <a href="https://keenable.ai" rel="noopener noreferrer">Keenable console</a>.
+    The key stays in this browser and is sent only to Keenable.
+  </p>
+
+  <form class="key-form" id="key-form">
+    <label for="key-input">Keenable API key</label>
+    <input class="key-input" id="key-input" type="password" autocomplete="off"
+           autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="keen_…">
+    <div class="key-buttons">
+      <button type="submit" id="key-save">Save</button>
+      <button type="button" id="key-clear">Clear</button>
+    </div>
+  </form>
+
+  <p class="key-state" id="key-state" role="status" aria-live="polite"></p>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  <a href="#about">About</a><span class="sep">&middot;</span><a href="#settings">Settings</a><span class="sep">&middot;</span><span class="mode-note" id="mode-note"></span>
+</footer>
+
+<script>
+/* ------------------------------------------------------------------
+   Configuration. Edit these three values to make this page your own.
+   ------------------------------------------------------------------ */
+
+/* Shown as the wordmark and in the page title. */
+const SEARCH_ENGINE_NAME = "Froogle";
+
+/* A Keenable API key baked into this file. Anyone who views source can read it, so set this only
+   for a copy that is not public: a file:// copy, an intranet, or a password-gated host. */
+const API_KEY = "";
+
+/* Same-origin path to the optional proxy. Relative by design: a copy of this file hosted anywhere
+   else resolves this against its own origin and so can never reach another operator's proxy. */
+const PROXY_PATH = "/api/search";
+
+// ---- FROOGLE:CORE:BEGIN ----
+// Pure functions only. No DOM, no network, no storage, no globals beyond the language and URL.
+// test/core.test.js evaluates this region on its own, where touching any of those throws.
+
+/* Documented range is 1-50 with a default of 10. 25 is one screenful of a plain list and there is
+   no second page to fetch, because Keenable exposes no offset, page, or cursor. */
+const MAX_RESULTS = 25;
+
+/* Documented range is 180-10000; outside it Keenable returns 400. This is a soft target that
+   rounds to a content boundary rather than a hard cap, so the UI clamps independently. 400 keeps
+   two visible lines full even when the API undershoots, at a fifth of the default payload. */
+const SNIPPET_MAX_LENGTH = 400;
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/* A dotted hostname: labels of letters, digits and inner hyphens, at least one dot. */
+const HOSTNAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i;
+
+const OPERATOR_PATTERN = /^(site|after|before):(.*)$/i;
+
+const MAX_DISPLAY_URL = 96;
+
+function isCalendarDate(value) {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!parts) return false;
+  const [, year, month, day] = parts.map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+      && date.getUTCMonth() === month - 1
+      && date.getUTCDate() === day;
+}
+
+/* Keenable also accepts ISO timestamps and relative deltas such as "7d" for the date filters, but
+   only YYYY-MM-DD is offered here: an unrecognized value has to stay in the query text, and a
+   loose pattern would swallow ordinary words that happen to follow "after:". */
+const OPERATORS = {
+  site: { field: "site", isValid: (value) => HOSTNAME_PATTERN.test(value) },
+  after: { field: "published_after", isValid: isCalendarDate },
+  before: { field: "published_before", isValid: isCalendarDate },
+};
+
+/* Splits the raw input into search text and API filters. Anything that is not a recognized
+   operator with a well-formed value stays in the text, so "ratio 3:1" and a mistyped
+   "after:yesterday" are searched for rather than silently dropped. */
+function parseQuery(raw) {
+  const filters = {};
+  const words = [];
+  for (const token of String(raw ?? "").split(/\s+/)) {
+    if (!token) continue;
+    const match = OPERATOR_PATTERN.exec(token);
+    const operator = match ? OPERATORS[match[1].toLowerCase()] : null;
+    if (operator && operator.isValid(match[2])) filters[operator.field] = match[2];
+    else words.push(token);
+  }
+  return { query: words.join(" "), filters };
+}
+
+function buildRequestBody(parsed) {
+  return {
+    query: parsed.query,
+    mode: "pro",
+    max_results: MAX_RESULTS,
+    snippet_max_length: SNIPPET_MAX_LENGTH,
+    ...parsed.filters,
+  };
+}
+
+function decodeFragment(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/* The fragment is authoritative. A query string is read only as legacy input, and only when the
+   fragment says nothing — normally the router has already rewritten it away. */
+function parseRoute(hash, search) {
+  const fragment = String(hash ?? "").replace(/^#/, "");
+  if (fragment === "about") return { view: "about", query: "" };
+  if (fragment === "settings") return { view: "settings", query: "" };
+  if (fragment.startsWith("q=")) {
+    const query = decodeFragment(fragment.slice(2)).trim();
+    if (query) return { view: "results", query };
+  }
+  if (!fragment) {
+    const legacy = legacyTarget(search);
+    if (legacy) return parseRoute(legacy, "");
+  }
+  return { view: "home", query: "" };
+}
+
+function formatRoute(view, query) {
+  if (view === "about") return "#about";
+  if (view === "settings") return "#settings";
+  if (view === "results") {
+    const trimmed = String(query ?? "").trim();
+    if (trimmed) return "#q=" + encodeURIComponent(trimmed);
+  }
+  return "";
+}
+
+/* Maps a legacy "?q=" or "?about" link onto its fragment form. Returns null when the query string
+   carries nothing we recognize, and "" when it does but the target is home — the caller needs to
+   tell "leave the URL alone" apart from "rewrite it to home". */
+function legacyTarget(search) {
+  const raw = String(search ?? "").replace(/^\?/, "");
+  if (!raw) return null;
+  const params = new URLSearchParams(raw);
+  if (params.has("q")) return formatRoute("results", params.get("q") || "");
+  if (params.has("about")) return "#about";
+  return null;
+}
+
+function resolveKey(configKey, stored) {
+  const configured = typeof configKey === "string" ? configKey.trim() : "";
+  if (configured) return configured;
+  const saved = typeof stored === "string" ? stored.trim() : "";
+  return saved || null;
+}
+
+/* The whole hybrid decision, in one place. Computed per search rather than cached, so saving or
+   clearing a key takes effect immediately with no reload. */
+function selectMode({ key, protocol, proxyKnownBad, proxyPath } = {}) {
+  if (typeof key === "string" && key) return "direct";
+  if (protocol === "file:") return "nokey";
+  if (!proxyPath) return "nokey";
+  if (proxyKnownBad) return "nokey";
+  return "shared";
+}
+
+function resultTitle(result) {
+  const title = typeof result?.title === "string" ? result.title.trim() : "";
+  if (title) return title;
+  const url = typeof result?.url === "string" ? result.url : "";
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/* Keenable's sources disagree about which text field is populated, so both are handled. */
+function pickSnippet(result) {
+  const snippet = typeof result?.snippet === "string" ? result.snippet : "";
+  if (snippet.trim()) return snippet;
+  return typeof result?.description === "string" ? result.description : "";
+}
+
+/* Snippets are raw extracted page text and carry newlines, not a prepared SERP snippet. */
+function normalizeSnippet(text) {
+  return String(text ?? "").replace(/\s+/g, " ").trim();
+}
+
+/* Blocks javascript:, data: and vbscript: URLs from ever reaching an href. */
+function isLinkableUrl(url) {
+  if (typeof url !== "string" || !url) return false;
+  try {
+    const protocol = new URL(url).protocol;
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function displayUrl(url) {
+  const raw = typeof url === "string" ? url : "";
+  let text = raw;
+  try {
+    const parsed = new URL(raw);
+    text = parsed.host + (parsed.pathname === "/" ? "" : parsed.pathname) + parsed.search;
+  } catch {
+    text = raw;
+  }
+  return text.length > MAX_DISPLAY_URL ? text.slice(0, MAX_DISPLAY_URL - 1) + "…" : text;
+}
+
+/* UTC getters and a fixed month table, so the same timestamp renders identically everywhere. */
+function formatDate(iso) {
+  if (typeof iso !== "string" || !iso.trim()) return null;
+  const parsed = Date.parse(iso);
+  if (Number.isNaN(parsed)) return null;
+  const date = new Date(parsed);
+  return MONTH_NAMES[date.getUTCMonth()] + " " + date.getUTCDate() + ", " + date.getUTCFullYear();
+}
+
+/* Reduces a failure to display text. `status` is an HTTP status, or "timeout", or "nokey" for the
+   deployment that has neither a key nor a proxy. No raw status code reaches the UI. */
+function errorMessage({ status, mode } = {}) {
+  const shared = mode === "shared";
+  if (status === "nokey") {
+    return {
+      text: "This copy of Froogle needs your own Keenable API key to search. Keys are free.",
+      action: "settings",
+    };
+  }
+  if (status === "timeout") {
+    return { text: "That search took too long. Try again.", action: null };
+  }
+  if (status === 429) {
+    return shared
+      ? { text: "Froogle's shared allowance is busy right now. Wait a moment, or add your own "
+              + "free Keenable key.", action: "settings" }
+      : { text: "Too many searches. Keenable allows a limited number per hour — wait a few "
+              + "minutes and try again.", action: null };
+  }
+  if ((status === 401 || status === 403) && !shared) {
+    return { text: "Keenable rejected that API key.", action: "settings" };
+  }
+  if (status === 402 && !shared) {
+    return { text: "This Keenable account is out of credits.", action: null };
+  }
+  if (status === 400) {
+    return {
+      text: "That search could not be understood — usually a malformed search operator.",
+      action: null,
+    };
+  }
+  return { text: "Search is unavailable right now. Try again.", action: null };
+}
+
+function modeIndicator(mode) {
+  if (mode === "direct") {
+    return { text: "Direct: your searches go straight to Keenable.", action: null };
+  }
+  if (mode === "shared") {
+    return { text: "Queries proxied through Froogle. Zero logs.", action: null };
+  }
+  return { text: "No API key set.", action: "settings" };
+}
+
+// ---- FROOGLE:CORE:END ----
+// Everything below may touch the DOM, storage and the network.
+
+const STORAGE_KEY = "froogle.key";
+const PROXY_UNAVAILABLE_KEY = "froogle.proxyUnavailable";
+
+const state = {
+  view: "home",
+  query: "",
+  status: "idle",
+  results: [],
+  error: null,
+  seq: 0,
+};
+
+const el = {
+  views: {
+    home: document.getElementById("view-home"),
+    results: document.getElementById("view-results"),
+    about: document.getElementById("view-about"),
+    settings: document.getElementById("view-settings"),
+  },
+  homeForm: document.getElementById("home-form"),
+  homeInput: document.getElementById("home-input"),
+  resultsForm: document.getElementById("results-form"),
+  resultsInput: document.getElementById("results-input"),
+  resultsSubmit: document.getElementById("results-submit"),
+  results: document.getElementById("results"),
+  notice: document.getElementById("notice"),
+  modeNote: document.getElementById("mode-note"),
+  keyForm: document.getElementById("key-form"),
+  keyInput: document.getElementById("key-input"),
+  keyClear: document.getElementById("key-clear"),
+  keyState: document.getElementById("key-state"),
+  favicon: document.getElementById("favicon"),
+};
+
+/* ---- storage ------------------------------------------------------
+   Safari's private mode and "block all cookies" make these throw. Forgetting a key is a far
+   better failure than a blank page, so every access degrades to "nothing is stored". */
+
+function readStore(store, key) {
+  try {
+    return store.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStore(store, key, value) {
+  try {
+    store.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeStore(store, key) {
+  try {
+    store.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const storedKey = () => readStore(localStorage, STORAGE_KEY);
+const proxyKnownBad = () => readStore(sessionStorage, PROXY_UNAVAILABLE_KEY) === "1";
+
+function currentMode() {
+  return selectMode({
+    key: resolveKey(API_KEY, storedKey()),
+    protocol: location.protocol,
+    proxyKnownBad: proxyKnownBad(),
+    proxyPath: PROXY_PATH,
+  });
+}
+
+/* ---- rendering ---- */
+
+function clear(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
+
+function settingsLink() {
+  const link = document.createElement("a");
+  link.href = "#settings";
+  link.textContent = "Open settings";
+  return link;
+}
+
+/* Builds a message that may end in a link to Settings. Text nodes throughout, never innerHTML. */
+function fillMessage(node, { text, action }) {
+  clear(node);
+  node.appendChild(document.createTextNode(text));
+  if (action === "settings") {
+    node.appendChild(document.createTextNode(" "));
+    node.appendChild(settingsLink());
+  }
+}
+
+function renderNotice() {
+  const notice = el.notice;
+  if (state.status === "idle" || state.status === "ok") {
+    notice.hidden = true;
+    clear(notice);
+    return;
+  }
+  notice.hidden = false;
+  notice.className = "notice";
+
+  if (state.status === "searching") {
+    fillMessage(notice, { text: "Searching…", action: null });
+    return;
+  }
+  if (state.status === "empty") {
+    fillMessage(notice, { text: "No results found for " + state.query + ".", action: null });
+    return;
+  }
+  notice.className = "notice notice-alert";
+  if (state.status === "unwired") {
+    // Phase 1 ships the shell only. Phase 2 replaces runSearch and deletes this branch.
+    fillMessage(notice, {
+      text: "Search is not wired up yet — this build is the interface only.",
+      action: null,
+    });
+    return;
+  }
+  fillMessage(notice, errorMessage(state.error || {}));
+}
+
+function renderFooter() {
+  fillMessage(el.modeNote, modeIndicator(currentMode()));
+}
+
+function renderKeyState() {
+  const configured = typeof API_KEY === "string" && API_KEY.trim();
+  if (configured) {
+    el.keyState.textContent = "This copy of Froogle has a key built in, which takes precedence "
+      + "over anything saved here.";
+    return;
+  }
+  el.keyState.textContent = storedKey()
+    ? "Using a key stored in this browser."
+    : "No key set — searches use Froogle's shared allowance.";
+}
+
+function render() {
+  const previousView = document.body.dataset.view;
+  for (const [name, node] of Object.entries(el.views)) node.hidden = name !== state.view;
+  document.body.dataset.view = state.view;
+
+  el.resultsInput.value = state.query;
+  el.resultsSubmit.disabled = state.status === "searching";
+  document.title = state.view === "results" && state.query
+    ? state.query + " — " + SEARCH_ENGINE_NAME
+    : SEARCH_ENGINE_NAME;
+
+  renderNotice();
+  renderFooter();
+  renderKeyState();
+
+  if (state.view === "home" && state.view !== previousView) el.homeInput.focus();
+}
+
+/* ---- search ---- */
+
+/* Phase 1 has no API client. Phase 2 replaces this whole function. */
+function runSearch() {
+  state.status = "unwired";
+  state.results = [];
+  state.error = null;
+  render();
+}
+
+/* ---- routing ---- */
+
+/* Rewrites a legacy "?q=" or "?about" URL to its fragment form. location.replace leaves no extra
+   history entry, and clearing `search` on a parsed URL keeps the old query string from surviving
+   as a relative-fragment resolution. */
+function normalizeLegacyUrl() {
+  const target = legacyTarget(location.search);
+  if (target === null) return false;
+  const url = new URL(location.href);
+  url.search = "";
+  url.hash = target;
+  location.replace(url.toString());
+  return true;
+}
+
+/* `resubmitted` is true when the visitor asked for a search the URL already shows, which produces
+   no hashchange but should still run the search again. */
+function applyRoute({ resubmitted = false } = {}) {
+  const route = parseRoute(location.hash, location.search);
+  const queryChanged = route.query !== state.query;
+  state.view = route.view;
+  state.query = route.query;
+
+  if (route.view === "results") {
+    if (queryChanged || resubmitted) runSearch();
+    else render();
+    return;
+  }
+  state.status = "idle";
+  state.results = [];
+  state.error = null;
+  render();
+}
+
+function navigate(view, query) {
+  const target = formatRoute(view, query);
+  if (target.replace(/^#/, "") === location.hash.replace(/^#/, "")) {
+    applyRoute({ resubmitted: true });
+    return;
+  }
+  location.hash = target;
+}
+
+/* ---- wiring ---- */
+
+function submitSearch(input) {
+  const raw = input.value.trim();
+  if (!raw) {
+    input.focus();
+    return;
+  }
+  navigate("results", raw);
+}
+
+function applyEngineName() {
+  for (const node of document.querySelectorAll("[data-wordmark]")) {
+    node.textContent = SEARCH_ENGINE_NAME;
+  }
+  const letter = SEARCH_ENGINE_NAME.trim().charAt(0) || "F";
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>"
+    + "<text x='16' y='25' font-family='Georgia,serif' font-size='27' text-anchor='middle'"
+    + " fill='#202020'>" + letter + "</text></svg>";
+  el.favicon.href = "data:image/svg+xml," + encodeURIComponent(svg);
+}
+
+function start() {
+  if (normalizeLegacyUrl()) return;
+
+  applyEngineName();
+
+  el.homeForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitSearch(el.homeInput);
+  });
+
+  el.resultsForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitSearch(el.resultsInput);
+  });
+
+  el.keyForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const key = el.keyInput.value.trim();
+    if (!key) {
+      el.keyState.textContent = "Enter a key to save, or use Clear to remove the saved one.";
+      return;
+    }
+    if (!writeStore(localStorage, STORAGE_KEY, key)) {
+      el.keyState.textContent = "This browser is blocking storage, so the key cannot be saved. "
+        + "Private browsing mode is the usual cause.";
+      return;
+    }
+    el.keyInput.value = "";
+    render();
+  });
+
+  el.keyClear.addEventListener("click", () => {
+    removeStore(localStorage, STORAGE_KEY);
+    el.keyInput.value = "";
+    render();
+  });
+
+  window.addEventListener("hashchange", () => applyRoute());
+  applyRoute();
+}
+
+start();
+</script>
+</body>
+</html>

@@ -22,12 +22,13 @@ Three phases. Each ends with a working, reviewable artifact and its tests passin
       empty, error, no-key), and settings key validation via a live search. At the end of this
       phase Froogle is fully usable from `file://` or any static host with a key.
 
-- [ ] **Phase 3: Proxy and shared mode.** `functions/api/search.js`: body allowlist, per-IP rate
-      limiter, the keyless-first fallback chain, unchanged status and body pass-through. Frontend
+- [ ] **Phase 3: Proxy and shared mode.** `functions/api/search.js`: body allowlist, the
+      keyless-first fallback chain, unchanged status and body pass-through. Frontend
       shared-mode path, proxy-unavailable detection cached in `sessionStorage`, and the `file:`
       short-circuit. `test/proxy.test.js`. README: what Froogle is, config table, the three
-      deployment shapes, the API key warning for public static hosts, the Cloudflare Rate Limiting
-      recommendation, and the manual test checklist.
+      deployment shapes, the API key warning for public static hosts, platform rate limiting (a
+      Cloudflare Rate Limiting rule, or the equivalent elsewhere) as the required step before
+      exposing a public instance with a key, and the manual test checklist.
 
 ## Later
 
@@ -37,3 +38,5 @@ Not part of v1, ordered by expected value:
 - [ ] **Keyless zero-signup**, if Keenable adds `X-Keenable-Title` to their CORS allowlist. Would
       demote the key prompt to a fallback and could retire the proxy.
 - [ ] **Point-in-time search** via the documented `query_time` parameter.
+- [ ] **In-proxy rate limiting.** Only worth having on real global state — KV or Durable Objects —
+      which trades away the zero-provisioning deployment story.

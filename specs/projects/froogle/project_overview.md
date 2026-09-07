@@ -36,8 +36,7 @@ JS variables at the top of `index.html`:
 * `PROXY_PATH` — default `"/api/search"`, a relative path, so a self-hosted copy resolves to
   its own origin and can never reach someone else's proxy
 
-Proxy environment: `KEENABLE_API_KEY`, `UNAUTHENTICATED_FIRST` (default true),
-`RATE_LIMIT_PER_MINUTE` (default 10).
+Proxy environment: `KEENABLE_API_KEY`, `UNAUTHENTICATED_FIRST` (default true).
 
 ## Design
 

@@ -193,7 +193,6 @@ the page, so no CORS handling, no preflight, no origin allowlist.
 export async function onRequestPost({ request, env })
 
 allowlistBody(raw)          -> { ok: true, value } | { ok: false, message }
-checkRateLimit(ip, env)     -> { ok: true } | { ok: false, retryAfter }
 callKeenable(body, auth)    -> Response        // auth: {key} | {title}
 shouldFallback(status)      -> boolean         // 401,402,429,5xx -> true; 400 -> false
 ```
@@ -201,37 +200,30 @@ shouldFallback(status)      -> boolean         // 401,402,429,5xx -> true; 400 -
 ### Flow
 
 1. Reject non-JSON or oversized bodies (8KB cap) with 400.
-2. `checkRateLimit` on `CF-Connecting-IP`. Over limit → 429 with `Retry-After`.
-3. `allowlistBody` — copy only `query`, `mode`, `max_results`, `snippet_max_length`, `site`,
+2. `allowlistBody` — copy only `query`, `mode`, `max_results`, `snippet_max_length`, `site`,
    `published_after`, `published_before`, `acquired_after`, `acquired_before`. Anything else is
    dropped silently. `query` must be a non-empty string under 2KB; `max_results` is clamped to
    1–50 regardless of what the client asked for.
-4. Call Keenable in the configured order. `UNAUTHENTICATED_FIRST` (default true) tries
+3. Call Keenable in the configured order. `UNAUTHENTICATED_FIRST` (default true) tries
    `/v1/search/public` with `X-Keenable-Title: <SEARCH_ENGINE_NAME>` first, then falls back to
    `/v1/search` with `KEENABLE_API_KEY`.
-5. Fall back **once**, only when `shouldFallback(status)` and a second credential actually exists.
+4. Fall back **once**, only when `shouldFallback(status)` and a second credential actually exists.
    A 400 is never retried: a malformed query fails identically on both tiers, so a retry only
    burns quota.
-6. Return Keenable's status and JSON body unchanged, so the client's error mapping is identical in
+5. Return Keenable's status and JSON body unchanged, so the client's error mapping is identical in
    both modes.
 
 Allowlisting rather than forwarding is the point: a pass-through proxy is an open relay for
 arbitrary JSON to Keenable on the operator's key.
 
-### Rate limiting
+The authenticated fallback exists only when `KEENABLE_API_KEY` is configured. With it unset the
+proxy is keyless-only and passes the upstream status and body through untouched, a 429 included —
+there is nothing to fall back to. A fork deployed without a key therefore inherits no credit
+exposure.
 
-Fixed-window counter in the Cache API, keyed on a SHA-256 of the IP plus the current minute, with
-a 60-second TTL. No KV binding, no Durable Object, nothing to provision — deployment stays "connect
-the repo to Pages".
-
-**Honest limitation:** the Cache API is per-colo, so the limit is per-datacenter, not global. A
-distributed attacker gets roughly `RATE_LIMIT_PER_MINUTE × colos`. This is a speed bump against
-casual scraping, not a real defense. The README documents a Cloudflare Rate Limiting rule as the
-actual backstop for a public instance — it runs at the edge, is genuinely global, and is
-configuration rather than code.
-
-The IP is hashed rather than stored raw, so nothing in the cache is personally identifying. Nothing
-else is written or logged anywhere.
+The proxy holds no per-request state at all: no counters, no cache entries, nothing keyed on the
+visitor. An operator exposing a public instance should put a platform rate-limiting rule in front
+of it — a Cloudflare Rate Limiting rule, or the equivalent on another host.
 
 ## Error handling strategy
 
@@ -287,8 +279,7 @@ Cases:
 
 ### `test/proxy.test.js`
 
-Imports `functions/api/search.js` directly — it is a plain ES module — and injects a stub `fetch`
-and a stub `caches`.
+Imports `functions/api/search.js` directly — it is a plain ES module — and injects a stub `fetch`.
 
 * Fallback order under `UNAUTHENTICATED_FIRST` true and false.
 * Fallback fires on 401, 402, 429, 5xx; does **not** fire on 400.
@@ -296,7 +287,6 @@ and a stub `caches`.
 * No fallback when the second credential is absent.
 * `allowlistBody` drops unknown fields, rejects a missing or oversized query, clamps
   `max_results` above 50 and below 1.
-* Rate limiter allows up to the configured count and rejects past it, with `Retry-After`.
 * Keenable's status and body are returned unchanged on success and on error.
 * The upstream request carries `X-Keenable-Title` on the keyless call and `X-API-Key` on the keyed
   call, and never both.
@@ -318,5 +308,10 @@ Browser-level behavior that cannot be unit tested, recorded in the README:
   property, which is the project's most distinctive feature.
 * **No client-side caching of results.** Keenable's quota is per visitor, queries repeat rarely
   within a session, and a cache is state to get wrong for no real gain.
+* **No rate limiter in the proxy.** A Cache API counter is per-colo, so it was a speed bump rather
+  than a defense, and any per-IP state — hashed and truncated included — undercuts "Froogle tracks
+  nothing". Truncation buys privacy only through collisions, and those same collisions punish
+  innocent users sharing a bucket. Platform rate limiting is the answer, and it leaves the logging
+  decision with the operator.
 * **No service worker.** Offline search is meaningless.
 * **No KV or Durable Objects.** Both would make deployment more than "connect the repo".
