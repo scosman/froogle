@@ -1,24 +1,16 @@
-// Unit tests for functions/api/search.js, the optional search proxy.
+// Unit tests for src/search.mjs, the optional search proxy.
 //
-// Run with: node --test  (from the repo root; it discovers test/ on its own)
+// Run with: node --test  (from the repo root; it discovers these on its own)
 //
-// The module is read from disk and imported as a data: URL rather than with a relative import.
-// The reason is the same one that makes every test file here .mjs: there is no package.json, so
-// Node treats a bare .js file as CommonJS, and `import("../functions/api/search.js")` loads only
-// through the module-syntax detection added in Node 20.19 / 22.7 — silently raising the project's
-// floor from Node 18. The proxy has to keep the .js extension for Cloudflare Pages, so the test
-// gives it an unambiguously-ESM URL instead. It is still the real file on disk.
+// Every file here is .mjs deliberately. There is no package.json, so Node treats a bare .js file
+// as CommonJS and an ESM `.js` import resolves only through the module-syntax detection added in
+// Node 20.19 / 22.7 — silently raising the project's floor from Node 18. The .mjs extension is
+// unambiguous on every version, which is why the handler can simply be imported here.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 
-const PROXY_PATH = fileURLToPath(new URL("../functions/api/search.js", import.meta.url));
-
-const proxy = await import(
-  "data:text/javascript," + encodeURIComponent(readFileSync(PROXY_PATH, "utf8"))
-);
+import * as proxy from "./search.mjs";
 
 const KEYLESS_URL = "https://api.keenable.ai/v1/search/public";
 const KEYED_URL = "https://api.keenable.ai/v1/search";
@@ -91,7 +83,7 @@ const fails = (status, body = { error: "no" }) => ({ status, body: JSON.stringif
 async function post({ body = { query: "cats" }, env = {}, replies = [], requestOptions } = {}) {
   return withStubbedFetch(replies, async (calls) => {
     const request = makeRequest(body, requestOptions);
-    const response = await proxy.onRequestPost({ request, env });
+    const response = await proxy.handleSearch(request, env);
     return { response, calls, request, text: await response.text() };
   });
 }

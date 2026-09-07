@@ -1,0 +1,18 @@
+{
+  "name": "froogle",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-09-07",
+
+  // The repo root is the site: index.html is the deployment, and it stays at the top level so it
+  // can be downloaded and opened on its own. Everything that is not the site is excluded by
+  // .assetsignore, which has to sit at the root of this directory to be found.
+  "assets": {
+    "directory": "./",
+    "binding": "ASSETS"
+  }
+
+  // KEENABLE_API_KEY is deliberately not declared here. It belongs in the dashboard as a Secret
+  // (Settings -> Variables and Secrets), where `wrangler deploy` leaves it alone. A plaintext var
+  // set in the dashboard would be wiped by the next deploy, because deploys replace vars with
+  // whatever this file declares — which is nothing.
+}

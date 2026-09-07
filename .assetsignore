@@ -1,0 +1,9 @@
+# Files under the assets directory that are not the site. Wrangler uploads everything in
+# assets.directory otherwise — Pages excluded functions/ and dotfiles on its own, Workers does not.
+.git/
+.gitignore
+.assetsignore
+wrangler.jsonc
+src/
+specs/
+README.md

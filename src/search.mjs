@@ -1,4 +1,9 @@
-/* Froogle's search proxy: a Cloudflare Pages Function at /api/search.
+/* Froogle's search proxy: the handler behind /api/search.
+ *
+ * Platform-neutral by construction. It takes (request, env) and returns a Response, using nothing
+ * outside the Minimum Common Web Platform API — fetch, Request, Response, URL, JSON — so the same
+ * file runs unmodified under any compliant runtime. The platform-specific part is an adapter:
+ * worker.mjs for Cloudflare, serve.mjs for Node. Neither holds any logic.
  *
  * It exists for one measured reason. Keenable's keyless endpoint requires an X-Keenable-Title
  * header, and Keenable's own CORS preflight does not allow that header, so no browser can call it.
@@ -60,7 +65,7 @@ const JSON_HEADERS = {
   "Cache-Control": "no-store",
 };
 
-export async function onRequestPost({ request, env }) {
+export async function handleSearch(request, env) {
   const body = await readJsonBody(request);
   if (!body.ok) return errorResponse(400, body.message);
 

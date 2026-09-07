@@ -8,8 +8,11 @@ from the [Keenable](https://keenable.ai) web search API. You can host it, or you
 
 ```
 index.html                 the whole frontend: markup, CSS, JS
-functions/api/search.js    the optional proxy (a Cloudflare Pages Function)
-test/                      unit tests, dev-only, no dependencies
+src/search.mjs             the optional proxy: (request, env) => Response, no platform APIs
+src/worker.mjs             Cloudflare adapter — routing only
+src/serve.mjs              Node adapter — the dev server, no dependencies
+src/*.test.mjs             unit tests, dev-only, no dependencies
+wrangler.jsonc             Cloudflare deployment config
 ```
 
 ---
@@ -42,7 +45,7 @@ reload. It is always shown in the footer.
 |---|---|---|
 | Downloads folder, `file://` | `index.html` | Direct |
 | Any static host — GitHub Pages, S3, Netlify, nginx | `index.html` | Direct |
-| Cloudflare Pages | `index.html` + `functions/api/search.js` | Direct and shared |
+| Cloudflare Workers | `index.html` + `src/` + `wrangler.jsonc` | Direct and shared |
 
 ### Downloads folder
 
@@ -60,22 +63,34 @@ against *that* host, so a self-hosted copy structurally cannot reach the origina
 keyless search of the session costs one wasted request and then Froogle remembers, for the rest of
 that browser session, to go straight to the key prompt instead.
 
-### Cloudflare Pages, with shared mode
+### Cloudflare Workers, with shared mode
 
-Connect the repository to Cloudflare Pages. There is no build command and no output directory to
-set — deploy the repo root as-is. Pages picks up `functions/api/search.js` on its own and serves it
-at `/api/search`, same-origin with the page, which is why there is no CORS configuration, no
-preflight, and no origin allowlist anywhere in this project.
+In the Cloudflare dashboard, **Workers & Pages → Create application → import your repository**.
+There is no build command to set: `wrangler.jsonc` already names the entry point and the assets
+directory, and every push to `main` deploys.
 
-A repo-root deploy publishes everything in the repo except `functions/` and files beginning with
-`_`, so `specs/`, `test/` and this README are reachable at the site URL too. That is harmless here
-— this repo is public and holds no secrets — but if you fork it and keep private notes in the tree,
-move them out of the deployed directory, or point the output directory at a folder containing only
-`index.html`.
+`src/worker.mjs` serves `/api/search`, same-origin with the page, which is why there is no CORS
+configuration, no preflight, and no origin allowlist anywhere in this project. It contains routing
+and nothing else — one path check, one method check — because Workers has no file-based routing of
+its own.
 
-Optionally set `KEENABLE_API_KEY` in the Pages environment so the proxy can fall back to your own
-key when the keyless tier is busy. **If you are exposing this publicly, read
-[Running a public instance](#running-a-public-instance) first.**
+> **A note if you are following an older guide.** This used to be a Cloudflare Pages project, where
+> a `functions/` directory *was* the route table and no adapter was needed. Cloudflare has since
+> removed Pages creation from the dashboard, and Workers does not read `functions/` — deployed as a
+> Worker, such a directory is uploaded as static files and nothing runs at `/api/search`. The
+> symptom is specific and misleading: every search falls back to the key prompt, while
+> `wrangler pages dev` keeps working locally, because that command emulates Pages rather than the
+> product being deployed to. `src/worker.mjs` is what replaces that routing.
+
+`.assetsignore` keeps `src/`, `specs/`, this README and the config out of the upload, so the
+deployed site is `index.html` and nothing else. Workers, unlike Pages, excludes nothing by default;
+if you fork this and keep private notes in the tree, add them to that file.
+
+Optionally set `KEENABLE_API_KEY` in the Worker's environment so the proxy can fall back to your own
+key when the keyless tier is busy. Add it under **Settings → Variables and Secrets** as a **Secret**,
+not a plaintext variable: `wrangler deploy` replaces plaintext vars with whatever `wrangler.jsonc`
+declares, and would wipe one set in the dashboard. Secrets are left alone. **If you are exposing
+this publicly, read [Running a public instance](#running-a-public-instance) first.**
 
 ---
 
@@ -90,7 +105,7 @@ key when the keyless tier is busy. **If you are exposing this publicly, read
 | `PROXY_PATH` | `"/api/search"` | Same-origin path to the proxy. Relative by design. Set it to `""` to disable shared mode entirely. |
 
 If you rename the engine, change `SEARCH_ENGINE_NAME` in **both** `index.html` and
-`functions/api/search.js` — the proxy sends it to Keenable as the `X-Keenable-Title` attribution
+`src/search.mjs` — the proxy sends it to Keenable as the `X-Keenable-Title` attribution
 string and cannot read the frontend's config.
 
 ### Proxy — Cloudflare environment variables
@@ -145,9 +160,12 @@ counters, no cache entries, nothing keyed on the visitor. That is what lets it p
 nothing, and it is what keeps deployment down to "connect the repo". Rate limiting belongs at the
 platform edge, where it works across colos and leaves the logging decision with you.
 
-On Cloudflare: **Security → WAF → Rate limiting rules**, matching on the path `/api/search`. Any
+On Cloudflare: **Security → WAF → Rate limiting rules**, matching on the path `/api/search`. This
+requires a **custom domain**. WAF and rate limiting are zone-level features, and a `*.workers.dev`
+hostname is not in one of your zones — a rule written there will never fire. Attach a custom domain
+to the Worker first, or treat `KEENABLE_API_KEY` as unset until you have. Any
 other host has an equivalent. Pick limits that suit your budget. The rule matches at the edge,
-*before* the Pages Function runs, so an over-limit request never reaches the proxy at all — the
+*before* the Worker runs, so an over-limit request never reaches the proxy at all — the
 browser gets the platform's 429 directly, and Froogle shows its "shared allowance is busy" message
 with a link to add a personal key.
 
@@ -187,17 +205,25 @@ There is no `package.json`, nothing to install, and nothing to build. Tests use 
 runner (Node 18+):
 
 ```sh
-node --test
+node --test          # the unit tests
+node src/serve.mjs   # the app, on http://localhost:8787
 ```
 
-Run it from the repository root. **Not** `node --test test/` — Node 22 resolves a bare directory
-argument as a module and fails; bare `node --test` discovers `test/` on its own.
+Run both from the repository root. **Not** `node --test src/` — Node 22 resolves a bare directory
+argument as a module and fails; bare `node --test` discovers `src/*.test.mjs` on its own.
 
-* `test/core.test.mjs` extracts the pure core of `index.html` — the region between the
+`src/serve.mjs` replaces `wrangler pages dev`, which emulated a product this repo no longer deploys
+to and would therefore pass on routing that fails in production. It bridges `node:http` to
+`Request`/`Response` and hands the result to the same `src/worker.mjs` Cloudflare runs, including a
+filesystem stand-in for the `ASSETS` binding that honours `.assetsignore`. Nothing to install.
+
+* `src/core.test.mjs` extracts the pure core of `index.html` — the region between the
   `FROOGLE:CORE:BEGIN` / `:END` markers — and evaluates it in a sandbox that holds nothing but the
   language plus `URL` and `URLSearchParams`. That both tests the logic and keeps the region free of
   DOM, network and storage dependencies.
-* `test/proxy.test.mjs` loads `functions/api/search.js` and injects a stub `fetch`.
+* `src/search.test.mjs` imports `src/search.mjs` and injects a stub `fetch`.
+* `src/worker.test.mjs` checks the adapter's routing: proxy path, asset path, and the 405 that
+  `index.html` reads as proof no proxy is there.
 
 Test files are `.mjs` deliberately: with no `package.json` to declare the module type, an ESM `.js`
 test would load only through Node's module-syntax detection, silently raising the project's floor
@@ -211,7 +237,7 @@ shipping a change to the browser layer.
 **Deployment and mode**
 
 The About and Settings prose has three states, and each renders only where it is true. Walk them
-in this order on a Cloudflare Pages build with the Function deployed:
+in this order on a deployed build, or against `node src/serve.mjs`:
 
 - [ ] **On first load, before any search**, the prose shows the *unknown* wording — "up to two ways
       your search can reach them, depending on how this copy of the page is hosted". The page has
