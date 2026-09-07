@@ -1,5 +1,5 @@
 ---
-status: draft
+status: complete
 ---
 
 # UI Design: Froogle
@@ -13,7 +13,7 @@ reference is the *era*, not any one engine. Explicitly avoided, because they are
 Google rather than to the period:
 
 * Multi-colored wordmark letters.
-* Google's link blue (`#1a0dab`) and their green URL line.
+* Their exact palette values — link blue `#1a0dab`, URL green `#006621`.
 * Their typefaces, logo forms, and layout measurements.
 
 What the period actually gives us, and what we take: heavy whitespace, a centered single-purpose
@@ -27,7 +27,8 @@ Declared once as CSS custom properties on `:root`.
 |---|---|---|
 | `--bg` | `#fcfcfa` | Page. Warm off-white, not pure white |
 | `--ink` | `#202020` | Body text, wordmark |
-| `--ink-soft` | `#5f5b54` | URL line, dates, footer, secondary text |
+| `--ink-soft` | `#5f5b54` | Dates, footer, secondary text |
+| `--url` | `#2d6a4f` | The URL line under a result title |
 | `--ink-faint` | `#8a857c` | Rules, borders, placeholder |
 | `--link` | `#1a3fb0` | Unvisited result titles |
 | `--link-visited` | `#6b2fa0` | Visited result titles |
@@ -40,9 +41,10 @@ footer, 44px home wordmark, 22px header wordmark.
 
 Spacing scale: 4, 8, 12, 16, 24, 40px. Nothing else.
 
-> **Note:** the URL line is grey rather than green. A green URL under a blue title is the single
-> most Google-specific cue in a SERP, and the brief is "inspired by", not "clone". One token
-> changes it back if you disagree.
+> **On the green URL line.** A colored URL beneath the title is a general SERP convention, not a
+> Google invention, so it stays. What we avoid is their specific value: `#006621` is a warm,
+> saturated emerald. `--url` is a desaturated pine with a cool cast — recognizably the same idea,
+> plainly not the same color. It clears WCAG AA against `--bg` at roughly 6.3:1.
 
 ## Page inventory
 
@@ -86,7 +88,7 @@ Froogle   [ typescript best practices    ] [ Search ]     <- 22px wordmark, link
 ──────────────────────────────────────────────────────    <- 1px --ink-faint rule
 
 Understanding TypeScript's structural typing              <- 15px, --link, underlined
-example.com/blog/structural-typing                        <- 13px, --ink-soft, plain text
+example.com/blog/structural-typing                        <- 13px, --url, plain text
 Jan 8, 2026 — Structural typing means a type is           <- 13px, --ink, 2 lines max
 compatible with another if its members are compatible…
 
@@ -125,7 +127,7 @@ of entry rather than at the next search.
 ### Result item
 
 * Title is an `<a>`. When `title` is empty, the URL's hostname is used instead.
-* URL line is plain text, not a link, so there is one click target per result.
+* URL line is plain text in `--url`, not a link, so there is one click target per result.
 * Snippet is `snippet || description || ""`, whitespace collapsed, clamped to two lines with
   `-webkit-line-clamp` and a `max-height` fallback.
 * A `published_at` date, when present, prefixes the snippet as `Jan 8, 2026 — ` in `--ink-soft`.
