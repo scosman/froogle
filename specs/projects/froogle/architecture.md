@@ -20,13 +20,15 @@ one `<script>`.
 ```
 index.html                 the whole frontend
 functions/api/search.js    the proxy (Cloudflare Pages Function). Optional.
-test/core.test.js          unit tests for the frontend's pure core
-test/proxy.test.js         unit tests for the proxy
+test/core.test.mjs         unit tests for the frontend's pure core
+test/proxy.test.mjs        unit tests for the proxy
 README.md
 ```
 
 `test/` is dev-only and affects nothing at deploy time. It needs no `npm install`: Node 18+ ships
-`node --test`.
+`node --test`. The `.mjs` extension is load-bearing — with no `package.json` to declare the module
+type, an ESM `.js` test loads only through Node's module-syntax detection, which would silently
+raise the floor from Node 18 to Node 20.19 / 22.7.
 
 ## Frontend
 
@@ -68,6 +70,7 @@ const state = {
 parseRoute(hash, search) -> { view, query }
 formatRoute(view, query) -> string            // "#q=foo", "#about", ""
 legacyTarget(search)     -> string | null     // "?q=foo" -> "#q=foo", else null
+legacyRedirect(search, hash) -> string | null // as legacyTarget, but an existing fragment wins
 
 // Query operators. Unrecognized or malformed operators stay in the query text.
 parseQuery(raw) -> { query, filters: { site?, published_after?, published_before? } }
@@ -84,9 +87,18 @@ isLinkableUrl(url)      -> boolean            // http: / https: only
 displayUrl(url)         -> string
 formatDate(iso)         -> string | null
 
-// Errors.
-errorMessage({ status, mode }) -> { text, action }   // action: null | "settings"
+// Text. The engine's name is a parameter, never read from the config block: the core region has
+// to stay evaluable on its own, and SEARCH_ENGINE_NAME is declared above it.
+escapeXml(text) -> string
+errorMessage({ status, mode, engineName }) -> { text, action }   // action: null | "settings"
+modeIndicator(mode, engineName)           -> { text, action }
 ```
+
+`SEARCH_ENGINE_NAME` is a documented configuration option, so a renamed instance must read
+correctly in every string it appears in. The three places that name it are the core messages above,
+the settings key-state line, and the static prose — the last through `[data-engine-name]` spans
+filled at startup alongside `[data-wordmark]`. `DEFAULT_ENGINE_NAME` in the core mirrors the config
+default and stands in when a caller passes nothing.
 
 `selectMode` centralizes the whole hybrid decision, which is otherwise the easiest thing in this
 app to get subtly wrong:
@@ -248,15 +260,23 @@ No stack traces or raw status codes reach the UI. The proxy logs nothing.
 
 ## Testing strategy
 
-Node's built-in test runner. Zero dependencies, no `package.json` required to run
-`node --test test/`.
+Node's built-in test runner. Zero dependencies and no `package.json`; run it as `node --test` from
+the repo root, which discovers `test/` on its own. Not `node --test test/` — Node resolves a bare
+directory argument as a module and fails.
 
-### `test/core.test.js`
+### `test/core.test.mjs`
 
 Reads `index.html`, extracts the text between the `FROOGLE:CORE` markers, and evaluates it in a
-`node:vm` context with no `document`, `window`, `fetch`, or `localStorage` defined. This gives real
-coverage of the pure logic and simultaneously proves the core region has not silently grown a DOM
-dependency — if it has, the tests throw on load.
+`node:vm` context seeded with nothing but the language built-ins plus `URL` and `URLSearchParams`,
+with `console` blanked. This gives real coverage of the pure logic and constrains the core region
+from growing a DOM dependency.
+
+The constraint is worth stating precisely, because it is weaker than "the tests throw on load": a
+*top-level* reference to `document`, `fetch` or `localStorage` fails when the region is evaluated,
+but one inside a function body fails only when that function is called. The guarantee therefore
+extends exactly as far as the suite's coverage of the exported functions, which is why every export
+is exercised. A separate test diffs the sandbox's globals against a bare context, so the sandbox
+itself cannot quietly acquire one.
 
 Cases:
 
@@ -266,6 +286,8 @@ Cases:
 * `parseRoute` / `formatRoute` — round-trips, including queries containing `#`, `&`, `+`, spaces,
   and non-ASCII; empty and unknown fragments fall back to home.
 * `legacyTarget` — `?q=` and `?about` map to fragments; anything else returns null.
+* `legacyRedirect` — follows the query string with no fragment present, keeps the fragment when
+  there is one, returns null with nothing legacy to rewrite.
 * `selectMode` — every row of the table above.
 * `resolveKey` — config key wins over stored; whitespace-only treated as absent.
 * `isLinkableUrl` — rejects `javascript:`, `data:`, `vbscript:`, `file:`, and malformed input;
@@ -273,11 +295,13 @@ Cases:
 * `pickSnippet` / `normalizeSnippet` — falls back to `description`; both absent yields `""`;
   newlines and runs of whitespace collapse.
 * `formatDate` — valid ISO, absent, and unparseable.
-* `errorMessage` — every status, and the mode-dependent difference at 429.
+* `errorMessage` / `modeIndicator` — every status, the mode-dependent difference at 429, and a
+  non-default `engineName` reaching every message that names the engine.
+* `escapeXml` — the five characters that would break the inline SVG favicon.
 * `buildRequestBody` — always sets `mode`, `max_results`, `snippet_max_length`; includes filters
   only when present.
 
-### `test/proxy.test.js`
+### `test/proxy.test.mjs`
 
 Imports `functions/api/search.js` directly — it is a plain ES module — and injects a stub `fetch`.
 

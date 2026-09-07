@@ -24,7 +24,7 @@ const EXPORTED = [
   "parseRoute", "formatRoute", "legacyTarget", "legacyRedirect",
   "resolveKey", "selectMode",
   "resultTitle", "pickSnippet", "normalizeSnippet", "isLinkableUrl", "displayUrl", "formatDate",
-  "errorMessage", "modeIndicator",
+  "escapeXml", "errorMessage", "modeIndicator", "DEFAULT_ENGINE_NAME",
 ];
 
 function extractCore() {
@@ -74,8 +74,9 @@ test("the core's sandbox holds nothing but the language, URL and URLSearchParams
 });
 
 test("core region carries no DOM, network or storage dependency", () => {
-  // Loading is the assertion: document, fetch, localStorage and friends are absent from the
-  // sandbox above, so any reference the core grew to one of them throws here.
+  // A top-level reference to document, fetch or localStorage fails here, at evaluation. One inside
+  // a function body fails only when that function runs — which is why every exported function is
+  // exercised below, and why a new export must arrive with a test that calls it.
   assert.doesNotThrow(loadCore);
 });
 
@@ -431,8 +432,10 @@ test("formatDate returns null for absent or unparseable input", () => {
 
 /* ---- messages ---- */
 
-function messageFor(status, mode) {
-  return core.errorMessage({ status, mode });
+const RENAMED = "Peachsearch";
+
+function messageFor(status, mode, engineName) {
+  return core.errorMessage({ status, mode, engineName });
 }
 
 test("errorMessage distinguishes the two modes at 429", () => {
@@ -484,6 +487,14 @@ test("errorMessage handles the timeout and no-key sentinels", () => {
   assert.equal(messageFor("nokey", "nokey").action, "settings");
 });
 
+test("errorMessage names the configured engine, and falls back to the default name", () => {
+  assert.match(messageFor("nokey", "nokey", RENAMED).text, new RegExp("copy of " + RENAMED));
+  assert.match(messageFor(429, "shared", RENAMED).text, new RegExp("^" + RENAMED + "'s"));
+  assert.match(messageFor("nokey", "nokey").text, /copy of Froogle/);
+  assert.match(messageFor(429, "shared", "   ").text, /^Froogle's/);
+  assert.equal(core.DEFAULT_ENGINE_NAME, "Froogle");
+});
+
 test("errorMessage never leaks a raw status code or an empty message", () => {
   const statuses = [0, 400, 401, 402, 403, 404, 429, 500, 503,
                     "timeout", "nokey", "unwired", undefined];
@@ -499,10 +510,24 @@ test("errorMessage never leaks a raw status code or an empty message", () => {
 });
 
 test("modeIndicator describes each mode and only prompts for a key when there is none", () => {
-  assert.deepEqual(toHost(core.modeIndicator("direct")),
+  assert.deepEqual(toHost(core.modeIndicator("direct", "Froogle")),
     { text: "Direct: your searches go straight to Keenable.", action: null });
-  assert.deepEqual(toHost(core.modeIndicator("shared")),
+  assert.deepEqual(toHost(core.modeIndicator("shared", "Froogle")),
     { text: "Queries proxied through Froogle. Zero logs.", action: null });
-  assert.deepEqual(toHost(core.modeIndicator("nokey")),
+  assert.deepEqual(toHost(core.modeIndicator("nokey", "Froogle")),
     { text: "No API key set.", action: "settings" });
+});
+
+test("modeIndicator names the configured engine, and falls back to the default name", () => {
+  assert.equal(core.modeIndicator("shared", RENAMED).text,
+    "Queries proxied through " + RENAMED + ". Zero logs.");
+  assert.equal(core.modeIndicator("shared").text, "Queries proxied through Froogle. Zero logs.");
+});
+
+test("escapeXml neutralizes the characters that would break the inline SVG favicon", () => {
+  assert.equal(core.escapeXml("&"), "&#38;");
+  assert.equal(core.escapeXml("<b>"), "&#60;b&#62;");
+  assert.equal(core.escapeXml(`"'`), "&#34;&#39;");
+  assert.equal(core.escapeXml("Froogle"), "Froogle");
+  assert.equal(core.escapeXml(null), "");
 });

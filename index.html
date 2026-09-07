@@ -18,6 +18,9 @@
   --link-visited: #6b2fa0;
   --notice: #8a4b1f;
   --focus: #1a3fb0;
+  --field: #ffffff;
+  --control: #f1efe9;
+  --control-hover: #e8e5dd;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --serif: Georgia, "Times New Roman", serif;
 }
@@ -80,22 +83,21 @@ a:visited { color: var(--link-visited); }
   padding: 8px 12px;
   border: 1px solid var(--ink-faint);
   border-radius: 2px;
-  background: #ffffff;
+  background: var(--field);
   color: var(--ink);
   font: 15px/1.5 var(--sans);
 }
-.search-input::placeholder { color: var(--ink-soft); }
 
 button {
   padding: 8px 16px;
   border: 1px solid var(--ink-faint);
   border-radius: 2px;
-  background: #f1efe9;
+  background: var(--control);
   color: var(--ink);
   font: 15px/1.5 var(--sans);
   cursor: pointer;
 }
-button:hover { background: #e8e5dd; }
+button:hover { background: var(--control-hover); }
 button[disabled] { color: var(--ink-soft); cursor: default; }
 
 /* ---- home ---- */
@@ -169,10 +171,13 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
   padding: 8px 12px;
   border: 1px solid var(--ink-faint);
   border-radius: 2px;
-  background: #ffffff;
+  background: var(--field);
   color: var(--ink);
   font: 15px/1.5 var(--sans);
 }
+
+/* Both inputs, so the settings field does not fall back to the UA's low-contrast default. */
+.search-input::placeholder, .key-input::placeholder { color: var(--ink-soft); }
 .key-buttons { display: flex; gap: 8px; margin-top: 12px; }
 .key-state { color: var(--ink-soft); font-size: 13px; }
 
@@ -203,7 +208,7 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
 
 <noscript>
   <p class="notice notice-alert page-message">
-    Froogle is a single HTML page that runs entirely in your browser, so it needs JavaScript
+    This is a single HTML page that runs entirely in your browser, so it needs JavaScript
     enabled to search. Nothing else on this page will work without it.
   </p>
 </noscript>
@@ -255,10 +260,12 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
     <li>
       <strong>Direct.</strong> If a Keenable API key is available &mdash; one you saved in
       <a href="#settings">Settings</a>, or one built into this copy of the page &mdash; your
-      browser calls Keenable itself. Your query never reaches a Froogle server.
+      browser calls Keenable itself. Your query never reaches a
+      <span data-engine-name>Froogle</span> server.
     </li>
     <li>
-      <strong>Shared.</strong> With no key, your query passes through Froogle's own thin proxy,
+      <strong>Shared.</strong> With no key, your query passes through
+      <span data-engine-name>Froogle</span>'s own thin proxy,
       which stores nothing and logs nothing, and forwards the search to Keenable.
     </li>
   </ul>
@@ -268,7 +275,8 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
 
   <h2>Privacy</h2>
   <p>
-    Froogle sets no cookies, runs no analytics, and includes no third-party code. Your query is
+    <span data-engine-name>Froogle</span> sets no cookies, runs no analytics, and includes no
+    third-party code. Your query is
     kept in the part of the address after the <code>#</code>, which browsers never send to a
     server, so it appears in no access log, no CDN log, and no <code>Referer</code> header.
   </p>
@@ -293,12 +301,13 @@ button[disabled] { color: var(--ink-soft); cursor: default; }
   <h2>Your own Keenable key</h2>
   <p>
     Without a key, searches share one allowance with everyone else using this page. With your own
-    key they go straight to Keenable from your browser &mdash; nothing touches a Froogle server,
+    key they go straight to Keenable from your browser &mdash; nothing touches a
+    <span data-engine-name>Froogle</span> server,
     and Keenable's free tier is far larger than the shared allowance.
   </p>
   <p>
-    Keys are free from the
-    <a href="https://keenable.ai" rel="noopener noreferrer">Keenable console</a>.
+    Keys are free from
+    <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>.
     The key stays in this browser and is sent only to Keenable.
   </p>
 
@@ -339,7 +348,9 @@ const PROXY_PATH = "/api/search";
 
 // ---- FROOGLE:CORE:BEGIN ----
 // Pure functions only. No DOM, no network, no storage, no globals beyond the language and URL.
-// test/core.test.js evaluates this region on its own, where touching any of those throws.
+// test/core.test.mjs evaluates this region on its own: the sandbox holds no document, fetch or
+// storage, so a top-level reference to one fails at load and a reference inside a function body
+// fails the moment a test calls it.
 
 /* Documented range is 1-50 with a default of 10. 25 is one screenful of a plain list and there is
    no second page to fetch, because Keenable exposes no offset, page, or cursor. */
@@ -362,6 +373,22 @@ const HOSTNAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-
 const OPERATOR_PATTERN = /^(site|after|before):(.*)$/i;
 
 const MAX_DISPLAY_URL = 96;
+
+/* Mirrors the SEARCH_ENGINE_NAME default in the config block above. The core cannot read that
+   constant without reaching outside its own region, so callers pass the name in and this stands in
+   when they pass nothing. */
+const DEFAULT_ENGINE_NAME = "Froogle";
+
+function resolveEngineName(name) {
+  return typeof name === "string" && name.trim() ? name.trim() : DEFAULT_ENGINE_NAME;
+}
+
+/* For text interpolated into the inline SVG favicon, where a name starting with "&" or "<" would
+   otherwise produce malformed markup. */
+function escapeXml(text) {
+  return String(text ?? "")
+    .replace(/[&<>"']/g, (character) => "&#" + character.charCodeAt(0) + ";");
+}
 
 function isCalendarDate(value) {
   const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -550,11 +577,12 @@ function formatDate(iso) {
 
 /* Reduces a failure to display text. `status` is an HTTP status, or "timeout", or "nokey" for the
    deployment that has neither a key nor a proxy. No raw status code reaches the UI. */
-function errorMessage({ status, mode } = {}) {
+function errorMessage({ status, mode, engineName } = {}) {
   const shared = mode === "shared";
+  const name = resolveEngineName(engineName);
   if (status === "nokey") {
     return {
-      text: "This copy of Froogle needs your own Keenable API key to search. Keys are free.",
+      text: "This copy of " + name + " needs your own Keenable API key to search. Keys are free.",
       action: "settings",
     };
   }
@@ -567,7 +595,7 @@ function errorMessage({ status, mode } = {}) {
   }
   if (status === 429) {
     return shared
-      ? { text: "Froogle's shared allowance is busy right now. Wait a moment, or add your own "
+      ? { text: name + "'s shared allowance is busy right now. Wait a moment, or add your own "
               + "free Keenable key.", action: "settings" }
       : { text: "Too many searches. Keenable allows a limited number per hour — wait a few "
               + "minutes and try again.", action: null };
@@ -587,12 +615,15 @@ function errorMessage({ status, mode } = {}) {
   return { text: "Search is unavailable right now. Try again.", action: null };
 }
 
-function modeIndicator(mode) {
+function modeIndicator(mode, engineName) {
   if (mode === "direct") {
     return { text: "Direct: your searches go straight to Keenable.", action: null };
   }
   if (mode === "shared") {
-    return { text: "Queries proxied through Froogle. Zero logs.", action: null };
+    return {
+      text: "Queries proxied through " + resolveEngineName(engineName) + ". Zero logs.",
+      action: null,
+    };
   }
   return { text: "No API key set.", action: "settings" };
 }
@@ -664,7 +695,8 @@ function removeStore(store, key) {
 }
 
 /* Render bookkeeping: the view we last drew, so the home input is focused on arrival rather than
-   on every render, and a settings message that survives exactly one render. */
+   on every render, and a settings message that persists across renders until the next
+   navigation clears it. */
 let previousView = null;
 let keyFeedback = "";
 
@@ -722,13 +754,13 @@ function renderNotice() {
     return;
   }
   notice.className = "notice notice-alert";
-  fillMessage(notice, errorMessage(state.error || {}));
+  fillMessage(notice, errorMessage({ ...state.error, engineName: SEARCH_ENGINE_NAME }));
 }
 
 /* The mode line is the link when there is no key, rather than growing a second "Open settings"
    next to the Settings link the footer already carries. */
 function renderFooter() {
-  const { text, action } = modeIndicator(currentMode());
+  const { text, action } = modeIndicator(currentMode(), SEARCH_ENGINE_NAME);
   clear(el.modeNote);
   if (action === "settings") {
     el.modeNote.appendChild(settingsLink(text));
@@ -834,15 +866,11 @@ function submitSearch(input) {
   navigate("results", raw);
 }
 
-function escapeXml(text) {
-  return text.replace(/[&<>"']/g, (character) => "&#" + character.charCodeAt(0) + ";");
-}
-
 /* The <link> in the document head carries the same letterform for the default name; this redraws
    it whenever a self-hoster has renamed the engine. The ink comes from the stylesheet so the
    colour lives in exactly one place. */
 function applyEngineName() {
-  for (const node of document.querySelectorAll("[data-wordmark]")) {
+  for (const node of document.querySelectorAll("[data-wordmark], [data-engine-name]")) {
     node.textContent = SEARCH_ENGINE_NAME;
   }
   const letter = SEARCH_ENGINE_NAME.trim().charAt(0) || "F";
@@ -884,7 +912,13 @@ function start() {
   });
 
   el.keyClear.addEventListener("click", () => {
-    keyFeedback = storedKey() && removeStore(localStorage, STORAGE_KEY) ? "Key cleared." : "";
+    const had = storedKey();
+    if (!removeStore(localStorage, STORAGE_KEY)) {
+      keyFeedback = "This browser is blocking storage, so a saved key cannot be removed. Private "
+        + "browsing mode is the usual cause.";
+    } else {
+      keyFeedback = had ? "Key cleared." : "";
+    }
     el.keyInput.value = "";
     render();
   });
@@ -897,11 +931,14 @@ function start() {
    read — a worse failure than the one <noscript> handles. */
 try {
   start();
-} catch {
+} catch (error) {
+  /* The console is the only place a stack can go: nothing about the failure reaches the UI. */
+  console.error(error);
   const failure = document.createElement("p");
   failure.className = "notice notice-alert page-message";
-  failure.textContent = SEARCH_ENGINE_NAME + " could not start in this browser.";
-  document.body.appendChild(failure);
+  failure.textContent = SEARCH_ENGINE_NAME + " could not start. If this copy has been edited, "
+    + "check the configuration at the top of the file; the browser console has the details.";
+  document.body.insertBefore(failure, document.body.firstChild);
 }
 </script>
 </body>

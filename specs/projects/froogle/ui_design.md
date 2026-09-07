@@ -34,6 +34,9 @@ Declared once as CSS custom properties on `:root`.
 | `--link-visited` | `#6b2fa0` | Visited result titles |
 | `--notice` | `#8a4b1f` | Error and empty-state text |
 | `--focus` | `#1a3fb0` | Focus ring |
+| `--field` | `#ffffff` | Text input interiors |
+| `--control` | `#f1efe9` | Button face |
+| `--control-hover` | `#e8e5dd` | Button face, hover |
 
 Type: `Georgia, "Times New Roman", serif` for the wordmark only; `system-ui, -apple-system,
 "Segoe UI", Roboto, sans-serif` for everything else. Sizes: 15px base, 13px secondary, 11px
@@ -45,6 +48,11 @@ Spacing scale: 4, 8, 12, 16, 24, 40px. Nothing else.
 > Google invention, so it stays. What we avoid is their specific value: `#006621` is a warm,
 > saturated emerald. `--url` is a desaturated pine with a cool cast — recognizably the same idea,
 > plainly not the same color. It clears WCAG AA against `--bg` at roughly 6.3:1.
+
+Every color the page paints is one of these tokens; no surface, border or text color is written as
+a literal outside the `:root` block. The one exception is the static favicon `<link>` in `<head>`,
+which carries `--ink`'s value inline because a `data:` URI cannot reference a custom property; the
+script redraws that favicon from the token at startup.
 
 ## Page inventory
 
@@ -164,8 +172,8 @@ About. It updates whenever a key is saved or cleared, without a reload.
 * The notice region is `role="status" aria-live="polite"`, so state changes are announced.
 * `document.title` updates to `query — Froogle` on the results view.
 * Body text meets WCAG AA contrast against `--bg`; `--ink-faint` is used only for rules and
-  borders, never for text — placeholder text included, which is why it takes `--ink-soft` (6.6:1)
-  rather than `--ink-faint` (3.6:1).
+  borders, never for text — placeholder text included, which is why every `::placeholder` takes
+  `--ink-soft` (6.6:1) rather than `--ink-faint` (3.6:1) or the UA default (~3.2:1).
 * No color is the sole carrier of meaning.
 
 ## Non-goals

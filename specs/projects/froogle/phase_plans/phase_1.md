@@ -9,7 +9,7 @@ status: draft
 Build `index.html` end to end with no network calls: design tokens, layout, the four views,
 fragment routing with legacy `?q=` normalization, the whole pure core, key storage guarded by
 `try/catch`, the settings form (no validation yet), the footer mode indicator, and the security
-meta tags. Plus `test/core.test.js` covering the full core surface.
+meta tags. Plus `test/core.test.mjs` covering the full core surface.
 
 `buildRequestBody` is built here alongside `parseQuery` rather than in Phase 2: it is pure, it is
 part of the core surface in `architecture.md`, and splitting it from the parser it consumes would
@@ -61,16 +61,20 @@ saying search is not wired up yet. Phase 2 replaces that one function with the A
    isLinkableUrl(url) -> boolean
    displayUrl(url) -> string
    formatDate(iso) -> string | null
-   errorMessage({ status, mode }) -> { text, action }
-   modeIndicator(mode) -> { text, action }
+   escapeXml(text) -> string
+   errorMessage({ status, mode, engineName }) -> { text, action }
+   modeIndicator(mode, engineName) -> { text, action }
    ```
 
    Operator rules: `site:`, `after:`, `before:` matched case-insensitively on whitespace tokens;
    `site` must be a dotted hostname, dates must be a real `YYYY-MM-DD`; anything malformed or
    empty stays in the query text. `formatDate` uses UTC getters and a fixed month table so it does
    not vary by locale or timezone. `errorMessage` accepts numeric statuses plus the sentinels
-   `"timeout"` and `"nokey"`. `legacyRedirect` layers the fragment-wins precedence over
-   `legacyTarget`, so the router and `parseRoute` cannot disagree about which one is authoritative.
+   `"timeout"` and `"nokey"`. `errorMessage` and `modeIndicator` take the engine's name as a
+   parameter rather than reading `SEARCH_ENGINE_NAME`, which is declared above the core marker: a
+   renamed instance has to read correctly everywhere, and the core has to stay evaluable alone.
+   `legacyRedirect` layers the fragment-wins precedence over `legacyTarget`, so the router and
+   `parseRoute` cannot disagree about which one is authoritative.
 
 6. **Runtime region.** `state` object per `architecture.md`; storage helpers wrapped in
    `try/catch` (`froogle.key` in `localStorage`, `froogle.proxyUnavailable` in `sessionStorage`);
@@ -128,3 +132,6 @@ saying search is not wired up yet. Phase 2 replaces that one function with the A
 - `buildRequestBody` — always sets `mode`, `max_results`, `snippet_max_length`; includes filters
   only when present.
 - `modeIndicator` — the three mode strings, and only `nokey` carries a settings action.
+- `escapeXml` — the five characters that would break the inline SVG favicon.
+- A renamed engine — a non-default `engineName` reaches every core message that names the engine,
+  and an absent or blank one falls back to `DEFAULT_ENGINE_NAME`.
