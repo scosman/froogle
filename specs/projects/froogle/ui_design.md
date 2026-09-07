@@ -147,6 +147,13 @@ suppressed on fields and replaced, not removed — the rule takes `--link` and d
 a `box-shadow`, which is visible on white and does not depend on the outline. Every other control
 keeps the standard 2px `--link` `:focus-visible` outline.
 
+That replacement holds only outside forced colors. Under `forced-colors: active` the platform
+drops `box-shadow` altogether and overrides `border-color` with a system color, which would leave
+a keyboard user with no indication at all on either field — so a `forced-colors` media query
+restores a real `2px solid Highlight` outline on `.search__field:focus` and `.key-input:focus`.
+It is load-bearing, not belt-and-braces: delete it and the two fields lose their focus state in
+Windows High Contrast.
+
 The submit button is solid `--ink` with `--on-ink` text and square corners. Clear is its outline
 counterpart. Both go `--ink-muted` when disabled.
 
@@ -205,9 +212,10 @@ dimmed:
 | `missing` | A request proved nothing answers at `PROXY_PATH` | "Not available here: nothing is answering at this copy of Froogle's proxy path." | **Enabled** |
 
 Each note states a fact about the deployment and stops there. What to *do* about it belongs to the
-state line above, which is the only one of the two that knows whether a key is saved: a note
-reading "switch to Direct and add a key" would otherwise land on the same screen as a state line
-saying searches already go direct with the key the visitor already added. One source of advice.
+state line below the radios, which is the only one of the two that knows whether a key is saved: a
+note reading "switch to Direct and add a key" would otherwise land on the same screen as a state
+line saying searches already go direct with the key the visitor already added. One source of
+advice.
 
 The asymmetry in the last column is deliberate. `blocked` is structural and permanent for that
 deployment, so the choice is disabled rather than offered and left to fail. `missing` was
@@ -242,7 +250,9 @@ error, and on every view but Results.
 ## Accessibility
 
 * Every control reachable and operable by keyboard, with a visible focus indicator: a 2px `--link`
-  outline on buttons, links and radios, and the doubled `--link` rule on text fields.
+  outline on buttons, links and radios, and the doubled `--link` rule on text fields — with a
+  `Highlight` outline restored on those fields under `forced-colors: active`, where `box-shadow`
+  is dropped by the platform.
 * Both search inputs have a real `<label>`, visually hidden — the wordmark beside them supplies the
   visible context. The Results view carries a visually hidden `<h1>`.
 * The mode radios are a `<fieldset>` with a visually hidden `<legend>`, and are operable with the
