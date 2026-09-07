@@ -2,8 +2,10 @@
 //
 // The core region is extracted from the HTML and evaluated in a vm context seeded with nothing but
 // the language built-ins plus URL and URLSearchParams. That gives real coverage of the logic and
-// simultaneously proves the region has not grown a DOM, network or storage dependency: if it has,
-// loading throws here.
+// constrains the region from growing a DOM, network or storage dependency — precisely: a top-level
+// reference to one fails when the region is evaluated, while a reference inside a function body
+// fails only when that function is called, so the guarantee reaches exactly as far as this suite's
+// coverage of the exports.
 //
 // Run with: node --test  (from the repo root; it discovers test/ on its own)
 //
@@ -24,7 +26,8 @@ const EXPORTED = [
   "parseRoute", "formatRoute", "legacyTarget", "legacyRedirect",
   "resolveKey", "selectMode",
   "resultTitle", "pickSnippet", "normalizeSnippet", "isLinkableUrl", "displayUrl", "formatDate",
-  "escapeXml", "errorMessage", "modeIndicator", "DEFAULT_ENGINE_NAME",
+  "escapeXml", "errorMessage", "modeIndicator",
+  "resolveEngineName", "DEFAULT_ENGINE_NAME",
 ];
 
 function extractCore() {
@@ -522,6 +525,17 @@ test("modeIndicator names the configured engine, and falls back to the default n
   assert.equal(core.modeIndicator("shared", RENAMED).text,
     "Queries proxied through " + RENAMED + ". Zero logs.");
   assert.equal(core.modeIndicator("shared").text, "Queries proxied through Froogle. Zero logs.");
+});
+
+test("resolveEngineName falls back to the default for a blank or missing name", () => {
+  // The host layer resolves the configured name once through this and uses the result everywhere,
+  // so a blank SEARCH_ENGINE_NAME cannot leave half the page named and half of it empty.
+  assert.equal(core.resolveEngineName("Peachsearch"), "Peachsearch");
+  assert.equal(core.resolveEngineName("  Peachsearch  "), "Peachsearch");
+  for (const blank of ["", "   ", "\t\n", null, undefined, 0, 12345]) {
+    assert.equal(core.resolveEngineName(blank), core.DEFAULT_ENGINE_NAME,
+      `expected the default name for ${JSON.stringify(blank)}`);
+  }
 });
 
 test("escapeXml neutralizes the characters that would break the inline SVG favicon", () => {

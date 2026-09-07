@@ -71,7 +71,7 @@ rest of the repo.
 
 | Name | Default | Meaning |
 |---|---|---|
-| `SEARCH_ENGINE_NAME` | `"Froogle"` | Wordmark and `<title>` |
+| `SEARCH_ENGINE_NAME` | `"Froogle"` | The engine's name everywhere it appears: wordmark, `<title>`, favicon letter, the About and Settings prose, the mode indicator, the key-state line, and the error messages that name it. Blank or whitespace-only falls back to `"Froogle"` |
 | `API_KEY` | `""` | Baked-in Keenable key. Publishes the key if the page is public; intended for `file://`, intranet, and personal deploys |
 | `PROXY_PATH` | `"/api/search"` | Same-origin path to the proxy. Relative by design (see below) |
 

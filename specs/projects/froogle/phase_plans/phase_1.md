@@ -103,7 +103,10 @@ saying search is not wired up yet. Phase 2 replaces that one function with the A
 - `the core's sandbox holds nothing but the language, URL and URLSearchParams` — the seeded
   globals are diffed against a bare context, so the sandbox cannot quietly grow one.
 - `core region carries no DOM, network or storage dependency` — the core evaluates in that sandbox,
-  which is the assertion: a reference to `document`, `fetch` or `localStorage` throws on load.
+  which is the assertion. Precisely: a *top-level* reference to `document`, `fetch` or
+  `localStorage` fails at evaluation, while one inside a function body fails only when that
+  function is called, so the guarantee reaches exactly as far as this suite's coverage of the
+  exports — which is why every export is exercised.
 - `parseQuery` — bare query; `site:` alone and mid-query; `after:`/`before:` valid and malformed;
   empty operator value stays in text; multiple operators; later operator wins; `ratio 3:1` is not
   an operator; case-insensitive operator names; empty input.
@@ -133,5 +136,7 @@ saying search is not wired up yet. Phase 2 replaces that one function with the A
   only when present.
 - `modeIndicator` — the three mode strings, and only `nokey` carries a settings action.
 - `escapeXml` — the five characters that would break the inline SVG favicon.
-- A renamed engine — a non-default `engineName` reaches every core message that names the engine,
-  and an absent or blank one falls back to `DEFAULT_ENGINE_NAME`.
+- A renamed engine — a non-default `engineName` reaches every core message that names the engine.
+- `resolveEngineName` — a blank, whitespace-only, absent or non-string name falls back to
+  `DEFAULT_ENGINE_NAME`, and a padded one is trimmed. The host layer resolves the configured name
+  once into `ENGINE_NAME` and uses that everywhere, so the page cannot end up half-renamed.

@@ -631,6 +631,13 @@ function modeIndicator(mode, engineName) {
 // ---- FROOGLE:CORE:END ----
 // Everything below may touch the DOM, storage and the network.
 
+/* The one place the configured name is resolved. Everything below uses ENGINE_NAME rather than
+   the raw constant, so a blank or padded SEARCH_ENGINE_NAME cannot leave half the page on the
+   default name and half on the empty one — and the core's own fallback, which would otherwise let
+   a call site that forgets `engineName` show the default on a renamed instance, stops being
+   reachable in practice. */
+const ENGINE_NAME = resolveEngineName(SEARCH_ENGINE_NAME);
+
 const STORAGE_KEY = "froogle.key";
 const PROXY_UNAVAILABLE_KEY = "froogle.proxyUnavailable";
 
@@ -754,13 +761,13 @@ function renderNotice() {
     return;
   }
   notice.className = "notice notice-alert";
-  fillMessage(notice, errorMessage({ ...state.error, engineName: SEARCH_ENGINE_NAME }));
+  fillMessage(notice, errorMessage({ ...state.error, engineName: ENGINE_NAME }));
 }
 
 /* The mode line is the link when there is no key, rather than growing a second "Open settings"
    next to the Settings link the footer already carries. */
 function renderFooter() {
-  const { text, action } = modeIndicator(currentMode(), SEARCH_ENGINE_NAME);
+  const { text, action } = modeIndicator(currentMode(), ENGINE_NAME);
   clear(el.modeNote);
   if (action === "settings") {
     el.modeNote.appendChild(settingsLink(text));
@@ -771,12 +778,12 @@ function renderFooter() {
 
 function keyStateText() {
   if (typeof API_KEY === "string" && API_KEY.trim()) {
-    return "This copy of " + SEARCH_ENGINE_NAME + " has a key built in, which takes precedence "
+    return "This copy of " + ENGINE_NAME + " has a key built in, which takes precedence "
       + "over anything saved here.";
   }
   return storedKey()
     ? "Using a key stored in this browser."
-    : "No key set — searches use " + SEARCH_ENGINE_NAME + "'s shared allowance.";
+    : "No key set — searches use " + ENGINE_NAME + "'s shared allowance.";
 }
 
 function renderKeyState() {
@@ -791,8 +798,8 @@ function render() {
   el.resultsInput.value = state.query;
   el.resultsSubmit.disabled = state.status === "searching";
   document.title = state.view === "results" && state.query
-    ? state.query + " — " + SEARCH_ENGINE_NAME
-    : SEARCH_ENGINE_NAME;
+    ? state.query + " — " + ENGINE_NAME
+    : ENGINE_NAME;
 
   renderNotice();
   renderFooter();
@@ -871,9 +878,9 @@ function submitSearch(input) {
    colour lives in exactly one place. */
 function applyEngineName() {
   for (const node of document.querySelectorAll("[data-wordmark], [data-engine-name]")) {
-    node.textContent = SEARCH_ENGINE_NAME;
+    node.textContent = ENGINE_NAME;
   }
-  const letter = SEARCH_ENGINE_NAME.trim().charAt(0) || "F";
+  const letter = ENGINE_NAME.charAt(0);
   const ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim();
   const svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>"
     + "<text x='16' y='25' font-family='Georgia,serif' font-size='27' text-anchor='middle'"
@@ -936,7 +943,7 @@ try {
   console.error(error);
   const failure = document.createElement("p");
   failure.className = "notice notice-alert page-message";
-  failure.textContent = SEARCH_ENGINE_NAME + " could not start. If this copy has been edited, "
+  failure.textContent = ENGINE_NAME + " could not start. If this copy has been edited, "
     + "check the configuration at the top of the file; the browser console has the details.";
   document.body.insertBefore(failure, document.body.firstChild);
 }
