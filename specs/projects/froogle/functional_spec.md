@@ -16,7 +16,8 @@ Keenable's API is browser-callable, but not in every mode. Measured behavior (se
   returns a static `Access-Control-Allow-Headers` list that omits it. No browser can call the
   keyless endpoint. This is a defect on their side and may be fixed later.
 * The **keyed** endpoint needs no such header, and `X-API-Key` *is* on the preflight allowlist. A
-  browser holding a key can search directly.
+  browser holding a key can search directly. Measured: `POST /v1/search` with only `Content-Type`
+  and `X-API-Key` returns 200.
 
 So the app has two request paths, and which one runs depends only on whether a key is available.
 
@@ -72,10 +73,26 @@ rest of the repo.
 |---|---|---|
 | `SEARCH_ENGINE_NAME` | `"Froogle"` | Wordmark and `<title>` |
 | `API_KEY` | `""` | Baked-in Keenable key. Publishes the key if the page is public; intended for `file://`, intranet, and personal deploys |
-| `PROXY_URL` | `""` | Proxy endpoint. Empty means direct mode only. The hosted instance sets `"/api/search"` |
+| `PROXY_PATH` | `"/api/search"` | Same-origin path to the proxy. Relative by design (see below) |
 
-Key resolution order: `API_KEY` → `localStorage` → none (shared mode if `PROXY_URL` is set,
-otherwise the no-key state).
+Key resolution order: `API_KEY` → `localStorage` → none (shared mode if a proxy responds at
+`PROXY_PATH`, otherwise the no-key state).
+
+`PROXY_PATH` is deliberately a **relative** path, and the repo ships deployable as-is:
+
+* Deployed whole to Cloudflare Pages, it resolves to that deployment's own Function. No
+  deploy-time substitution, no build step, no domain baked into the source.
+* Copied as a lone `index.html` to any other static host, it resolves to *that* host, where nothing
+  is listening. A self-hosted copy therefore **cannot** reach the original operator's proxy — a
+  structural guarantee, unlike a hardcoded domain check, which is a client-side string anyone can
+  edit.
+* A self-hoster who deploys the whole repo gets shared mode against their own proxy and their own
+  key, with no edits.
+* Over `file://` it resolves to `file:///api/search` and fails.
+
+The first failure (404, a non-JSON body, or a network error) marks the proxy unavailable for the
+rest of the session via `sessionStorage`, so a static-only deployment wastes one request per
+session rather than one per search, and every later search goes straight to the key prompt.
 
 ### Proxy — environment variables
 
@@ -111,6 +128,11 @@ unlike `history.pushState`, which browsers block on `file://` URLs. Back and for
 
 Centered wordmark, a single text input, a submit button. Footer: About, Settings, mode indicator.
 Focus is placed in the input on load.
+
+The mode indicator reads:
+
+* Direct — "Direct: your searches go straight to Keenable."
+* Shared — "Queries proxied through Froogle. Zero logs."
 
 ### Results
 
@@ -276,8 +298,6 @@ countdown is possible in direct mode; a limit is discoverable only when a 429 ar
 * **Result count.** No count parameter exists in Keenable's schema or SDKs, so the app renders
   whatever is returned. A probe for an undocumented parameter (`limit`, `count`, `top_k`,
   `num_results`, `max_results`) is pending; if one works, it is a one-line addition.
-* **Keyed request without `X-Keenable-Title`** is inferred from the API's error wording
-  ("required for token-less requests") and not yet measured. Direct mode depends on it.
 * **`file://` support** depends on Keenable echoing `Origin: null`. They reflect the origin rather
   than returning `*`, so this needs one real browser test before the README promises it.
 * **Ask Keenable to allowlist `X-Keenable-Title`.** If they do, keyless becomes available to the
