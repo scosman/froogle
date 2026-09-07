@@ -399,7 +399,10 @@ a:visited { color: var(--link-visited); }
     </p>
 
     <ul>
-      <li><strong>Fast:</strong> results in about 200ms</li>
+      <li>
+        <strong>Fast:</strong> results arrive quickly, and the page shows how long each search
+        took.
+      </li>
       <li>
         <strong>Ad-free:</strong> no ads, ever. We use the free tier of Keenable's API so there's
         no catch.
@@ -854,8 +857,9 @@ function formatDate(iso) {
 }
 
 /* The measured round trip of the search on screen, for the utility row. Two decimals of a second
-   is the resolution the About page's "about 200ms" claim is made at; anything finer is noise, and
-   a fabricated number would be worse than none. Null for anything that is not a real measurement,
+   is enough to read at a glance; anything finer is noise, and a fabricated number would be worse
+   than none. The About page deliberately promises no particular figure — this is the measurement,
+   so it is the only speed claim the page makes. Null for anything that is not a real measurement,
    so the caller shows nothing rather than "NaN seconds". */
 function formatElapsed(ms) {
   if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return null;
