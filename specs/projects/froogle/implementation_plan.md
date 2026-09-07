@@ -16,7 +16,7 @@ Three phases. Each ends with a working, reviewable artifact and its tests passin
       `test/core.test.mjs` covering the full core surface. Ships as a real page you can navigate;
       searching reports that search is not wired yet.
 
-- [ ] **Phase 2: Search, direct mode.** The API client with `AbortController`, sequence-based
+- [x] **Phase 2: Search, direct mode.** The API client with `AbortController`, sequence-based
       race resolution, and the 15s timeout. `buildRequestBody`, result rendering with
       `createElement`/`textContent` and the `isLinkableUrl` guard, every state (searching, results,
       empty, error, no-key), and settings key validation via a live search. At the end of this

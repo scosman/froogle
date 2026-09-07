@@ -1,5 +1,5 @@
 ---
-status: draft
+status: complete
 ---
 
 # Phase 2: Search, direct mode
@@ -17,9 +17,15 @@ Phase 3 owns the proxy and the shared-mode request. Two consequences for this ph
   serve that request yet. `currentMode()` therefore carries a **one-line bridge** mapping
   `"shared"` to `"nokey"` until the proxy client exists, so the footer, the mode indicator, the
   Settings key-state line and the search path all tell the same true story about a Phase 2 build.
-  Phase 3 deletes that line, and nothing else: every one of those four is derived from
-  `currentMode()`, so the deletion is a single coordinated edit. This mirrors how Phase 1 handled
-  the unwired search: one marked branch, deleted by the phase that makes it false.
+  Every one of those four is derived from `currentMode()`, so retiring the bridge is a single
+  coordinated edit. **Phase 3 retires it by replacing that `return` with `return mode;` — not by
+  deleting the line.** The bridge *is* the return statement; deleting it makes `currentMode()`
+  return `undefined`, and nothing catches that. The mode indicator and the key-state line both
+  fall through to their no-key wording, `sharedAllowanceExists()` stays false, and `runSearch`'s
+  `mode === "nokey"` guard stops matching, so a keyless search reaches `searchRequest` and throws
+  into the generic error. The page looks plausible while all five surfaces lie, and no test covers
+  `currentMode`. This mirrors how Phase 1 handled the unwired search: one marked branch, retired by
+  the phase that makes it false.
 
   A fifth surface joins them and does *not* go away in Phase 3: the static About and Settings
   prose that describes a shared allowance. Over `file://` there has never been one and never will
@@ -79,8 +85,12 @@ What is left above the core marker is wiring — a `fetch` call, a timer, and `c
    const REQUEST_TIMEOUT_MS = 15000;
    ```
 
-4. **The API client.** One function, one timeout, one place where any failure becomes a
-   `{ status }` pair — nothing throws out of it, so the render path never sees an exception.
+4. **The API client.** One function, one timeout, one place where a *request* failure becomes a
+   `{ status }` pair, so the render path never has to reason about a network exception. One thing
+   does throw out of it, deliberately: `searchRequest` refusing a mode it does not recognize,
+   which happens before the try block. That is a programming error rather than a failed search,
+   and it belongs in the console rather than flattened into "Search is unavailable right now" —
+   see step 7 for where it is caught.
 
    ```js
    async function requestSearch(body, { mode, key, controller }) -> { results } | { status }
@@ -144,9 +154,15 @@ What is left above the core marker is wiring — a `fetch` call, a timer, and `c
    key is what they asked for.
 
    Both async entry points are called through a `.catch()` rather than `void`, and the body of
-   `saveKey` re-enables its buttons from a `finally`. Nothing in `requestSearch` throws, so the
-   realistic trigger is a bug in `render()` — but a silent unhandled rejection there strands the
-   page on "Searching…", or leaves Save and Clear disabled, with only a reload to undo it.
+   `saveKey` re-enables its buttons from a `finally`. Two things reach those catches, and neither
+   may be silent: `searchRequest` throwing on a mode it does not recognize (step 4), and a bug
+   anywhere after an `await` — in `render()`, say. A silent unhandled rejection from either strands
+   the page on "Searching…", or leaves Save and Clear disabled, with only a reload to undo it.
+
+   **A note for Phase 3**, which adds the second call site: route the shared-mode search through
+   `startSearch` too. Calling `runSearch` directly, or reaching for `void`, gives back exactly the
+   unhandled rejection this wrapper exists to prevent — and the mode throw makes that reachable,
+   not hypothetical.
 
 8. **Tests** in `test/core.test.mjs` for the three new core functions, plus the `"unwired"`
    deletion.
@@ -170,8 +186,20 @@ What is left above the core marker is wiring — a `fetch` call, a timer, and `c
 - All 61 Phase 1 tests continue to pass, including the sandbox-globals diff and the
   no-DOM-dependency evaluation, which now cover three more exported functions.
 
-The DOM and `fetch` layers stay on the manual checklist per `architecture.md`. What is now
-checkable there and was not before, added to that checklist in Phase 3 alongside the README:
-the Settings key-state line, the footer and a search all agree about the mode; a screen reader
-announces the result count rather than falling silent; and keyboard focus survives a search
-started from either Search button.
+The DOM and `fetch` layers stay on the manual checklist per `architecture.md`. Phase 3 transcribes
+that checklist into the README, so these are the Phase 2 behaviors only a browser can verify and
+that nothing else records:
+
+* **On a hosted build, the About and Settings prose shows the *shared* wording; on `file://` it
+  shows the solo wording.** Check this first. Every Phase 2 build resolves to solo, so the shared
+  branch of that prose renders for the first time in Phase 3, on the deploy that makes shared mode
+  reachable — it has never been seen, and nothing else in the suite looks at it.
+* Tapping Search on a touch device does **not** re-open the on-screen keyboard over the results.
+  That is the entire reason the focus restore tests `:focus-visible` rather than `activeElement`,
+  and a regression here is invisible on a desktop browser.
+* Keyboard focus survives a search started from either Search button — including the two failures
+  that return early, which in a keyless build are the common path.
+* A screen reader announces the result count when results arrive, rather than falling silent after
+  "Searching…".
+* The Settings key-state line, the footer indicator and an attempted search all agree about the
+  mode, in every combination of key present/absent and `file://`/hosted.
