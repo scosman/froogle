@@ -107,55 +107,34 @@ and both should fall back to keyless.
 * **Keyed:** pricing page states 100,000 free requests/month then pay-as-you-go. The 10 req/s
   figure is from the project owner and is not in any published artifact we could reach.
 
-## CORS — UNVERIFIED, and the odds are poor
+## CORS — VERIFIED OPEN
 
-Not testable from this session. Two structural reasons a browser-direct call is unlikely to work:
+The project owner tested this directly: CORS on `api.keenable.ai` is wide open. The browser can
+call `POST /v1/search/public` from any origin, which is what makes the no-backend design possible.
 
-1. Search is `POST` with `Content-Type: application/json` — never a CORS-simple request, so it
-   **always** triggers an `OPTIONS` preflight.
-2. The public tier *requires* the custom `X-Keenable-Title` header, which must additionally be
-   named in `Access-Control-Allow-Headers` on the preflight response.
+Two follow-ups worth confirming, because they are the cases that could still bite:
 
-So browser-direct needs a deliberately browser-friendly CORS config, on an API whose entire
-published surface is server-side SDKs and MCP. Assume no until proven otherwise.
+1. **The preflight must allow `X-Keenable-Title`.** Search is a JSON `POST`, so it is always
+   preflighted, and the public tier rejects requests that omit that header. If the CORS test was
+   run without it, the header may still be missing from `Access-Control-Allow-Headers`.
+2. **`file://` sends `Origin: null`.** The README promises "your Downloads folder" as a valid
+   deployment, so the `null` origin needs to work. It will if the API returns
+   `Access-Control-Allow-Origin: *`; it may not if the API echoes the request origin back.
 
-### Curls to settle it
-
-```bash
-# 1. Preflight. Look for access-control-allow-origin / -headers in the response headers.
-curl -i -X OPTIONS "https://api.keenable.ai/v1/search/public" \
-  -H "Origin: https://example.com" \
-  -H "Access-Control-Request-Method: POST" \
-  -H "Access-Control-Request-Headers: content-type,x-keenable-title"
-
-# 2. The actual keyless search, with an Origin, to see if ACAO comes back on the real response.
-curl -i -X POST "https://api.keenable.ai/v1/search/public" \
-  -H "Content-Type: application/json" \
-  -H "X-Keenable-Title: Froogle" \
-  -H "Origin: https://example.com" \
-  -d '{"query":"old school search engines","mode":"pro"}'
-
-# 3. Does the public tier really reject a missing X-Keenable-Title?
-curl -i -X POST "https://api.keenable.ai/v1/search/public" \
-  -H "Content-Type: application/json" \
-  -d '{"query":"test"}'
-
-# 4. How many results come back, and is snippet or description populated?
-curl -sS -X POST "https://api.keenable.ai/v1/search/public" \
-  -H "Content-Type: application/json" -H "X-Keenable-Title: Froogle" \
-  -d '{"query":"toronto weather"}' \
-  | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d["results"]; print("count:",len(r)); [print(x["title"][:60],"| snip:",len(x.get("snippet") or ""),"| desc:",len(x.get("description") or "")) for x in r]'
-
-# 5. Does snippet_max_length actually work?
-curl -sS -X POST "https://api.keenable.ai/v1/search/public" \
-  -H "Content-Type: application/json" -H "X-Keenable-Title: Froogle" \
-  -d '{"query":"toronto weather","snippet_max_length":160}' \
-  | python3 -c 'import json,sys; print([len(x.get("snippet") or "") for x in json.load(sys.stdin)["results"]])'
-
-# 6. Rate-limit headers on a 429? Fire a burst and inspect.
-for i in $(seq 1 15); do
-  curl -s -o /dev/null -w "%{http_code} " -X POST "https://api.keenable.ai/v1/search/public" \
-    -H "Content-Type: application/json" -H "X-Keenable-Title: Froogle" \
-    -d '{"query":"test '"$i"'"}'
-done; echo
+```js
+// Paste into the devtools console of any page to check both at once.
+await fetch("https://api.keenable.ai/v1/search/public", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "X-Keenable-Title": "Froogle" },
+  body: JSON.stringify({ query: "old school search engines" }),
+}).then(r => r.json());
 ```
+
+## Consequences of calling from the browser
+
+* **Quota is per visitor.** Each user's IP gets its own keyless 1,000/hour, so the engine has no
+  aggregate rate limit and costs the operator nothing.
+* **An `API_KEY` in a static file is public.** Anyone who views source can read it. The key option
+  is therefore only meaningful for a private deployment (`file://`, an intranet, a password-gated
+  host). This must be stated plainly in the README next to the config block.
+* **No server-side caching is possible.** Any caching is per-browser.

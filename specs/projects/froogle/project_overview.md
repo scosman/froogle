@@ -4,36 +4,36 @@ status: draft
 
 # Froogle
 
-I want to make "Froogle", a free search engine using the https://docs.keenable.ai/api-reference API.
+A free search engine over the [Keenable](https://keenable.ai) web search API.
 
-## Deployment shapes
+CORS on `api.keenable.ai` is wide open (verified by the project owner), so the browser can call
+the keyless public endpoint directly. That removes the backend entirely: every visitor spends
+their **own** IP's keyless quota, so the engine costs nothing to run and has no shared rate limit
+to protect.
 
-* **Option 1: self hostable.** I want this regardless. Should be trivial to self host (docker
-  image P2), or to deploy to your own Cloudflare Workers (portable across many hosts, but
-  instructions for CF in README). I'm thinking that means Node/TS?
-* **Option 2: public instance.** I'll host one, but I expect to quickly hit the 10 requests per
-  second limit and 100k/mo if popular at all. Check how the API works. There's an unauthenticated
-  mode with request limit per IP -- can I call it from the client's browser? Would need CORS which
-  I doubt the API has. Fallback if no CORS would be backend fallback: if the authenticated version
-  fails, fall back to unauthenticated. On super distributed Cloudflare Workers, I have a lot of IPs
-  on the backend. Maybe a config flag for which to try first. My deployment might do unauth first,
-  and use the key on rate limits.
-* **API key optional:** the unauthenticated one works fine for most people self hosted.
+## The repo
+
+Two files. That's it.
+
+* `index.html` — the entire search engine. Markup, CSS, and JS in one file. No frameworks, no
+  build step, no dependencies, no images.
+* `README.md`
+
+## Self hosting
+
+"Anywhere you can host an HTML file" — GitHub Pages, S3, Cloudflare Pages, Netlify, a static
+nginx, or your own Downloads folder opened over `file://`.
+
+## Config
+
+JS variables at the top of `index.html`:
+
+* `SEARCH_ENGINE_NAME` — default `"Froogle"`
+* `API_KEY` — default none
+* `UNAUTHENTICATED_FIRST` — bool, default `false`. When an API key is present and this is set, try
+  the keyless endpoint first and fall back to the key on rate limits.
 
 ## Design
 
-Very "old school Google". Just "Froogle" above the search box, small about at the bottom. SERP page
-is a simple list of links. All pages return as a single file, CSS in the file. No frameworks. No
-images.
-
-## Config options
-
-* Search engine name (default "Froogle")
-* API key (default none)
-* `unauthenticated_first` (bool, default false; if an API key is present and this is set, try
-  unauthenticated before authenticated)
-
-## Open questions
-
-* API options: TBD
-* SERP design: TBD
+Very "old school Google". Just "Froogle" above the search box, small about at the bottom. SERP is
+a simple list of links. No frameworks. No images.
