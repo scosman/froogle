@@ -12,7 +12,11 @@
 
 import { handleSearch } from "./search.mjs";
 
-export const PROXY_PATH = "/api/search";
+/* Module-local, deliberately not exported. The Workers runtime treats every named export of the
+   entry module as a handler and rejects a string one outright ("not of type 'function or
+   ExportedHandler'"), which fails the Worker at startup rather than at request time. Node's test
+   runner does not care, so nothing but the real runtime catches it. */
+const PROXY_PATH = "/api/search";
 
 export default {
   async fetch(request, env) {
