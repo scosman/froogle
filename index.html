@@ -6,46 +6,38 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Froogle</title>
-<link id="favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext x='16' y='25' font-family='Georgia,serif' font-size='27' text-anchor='middle' fill='%23202020'%3EF%3C/text%3E%3C/svg%3E">
+<link id="favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext x='16' y='24' font-family='Helvetica Neue,Helvetica,Arial,sans-serif' font-weight='500' font-size='26' letter-spacing='-1' text-anchor='middle' fill='%23111111'%3EF%3C/text%3E%3C/svg%3E">
 <style>
 :root {
-  --bg: #fcfcfa;
-  --ink: #202020;
-  --ink-soft: #5f5b54;
-  --url: #2d6a4f;
-  --ink-faint: #8a857c;
-  --link: #1a3fb0;
-  --link-visited: #6b2fa0;
-  --notice: #8a4b1f;
-  --focus: #1a3fb0;
-  --field: #ffffff;
-  --control: #f1efe9;
-  --control-hover: #e8e5dd;
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --serif: Georgia, "Times New Roman", serif;
+  --bg: #ffffff;
+  --ink: #111111;
+  --on-ink: #ffffff;
+  --ink-muted: #6e6e6e;
+  --body: #3d3d3d;
+  --link: #1734d4;
+  --link-visited: #6b2ea8;
+  --alert: #b3261e;
+  --rule: #eeeeee;
+  --measure: 660px;
+  --font: "Helvetica Neue", Helvetica, "Segoe UI", "Liberation Sans", Arial, sans-serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
-html { background: var(--bg); }
-
 body {
-  margin: 0 auto;
-  max-width: 640px;
-  padding: 0 16px 40px;
+  margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 15px/1.5 var(--sans);
+  font: 15px/1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--link); }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
 a:visited { color: var(--link-visited); }
 
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 
 .visually-hidden {
   position: absolute;
@@ -62,301 +54,443 @@ a:visited { color: var(--link-visited); }
 /* ---- wordmark ---- */
 
 .wordmark {
-  display: inline-block;
-  font-family: var(--serif);
-  font-weight: normal;
-  letter-spacing: 0.02em;
+  margin: 0;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.035em;
   color: var(--ink);
-  text-decoration: none;
 }
-.wordmark:visited { color: var(--ink); }
-.wordmark-large { font-size: 44px; margin: 0 0 24px; }
-.wordmark-small { font-size: 22px; line-height: 1; }
+.wordmark a,
+.wordmark a:visited { color: inherit; text-decoration: none; }
 
 /* ---- search form ---- */
 
-.search-form { display: flex; gap: 8px; }
+.search__row { display: flex; align-items: flex-end; gap: 14px; }
 
-.search-input {
+/* Borderless but for the baseline rule, per the reference design. The focus ring the UA would
+   draw is therefore replaced rather than removed: the rule doubles in weight and takes --link,
+   which is visible against white and does not depend on the outline the reset suppresses. */
+.search__field {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 8px 12px;
-  border: 1px solid var(--ink-faint);
-  border-radius: 2px;
-  background: var(--field);
+  border: 0;
+  border-bottom: 1px solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  padding: 0 0 8px;
+  font: inherit;
   color: var(--ink);
-  font: 15px/1.5 var(--sans);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search__field::placeholder { color: var(--ink-muted); }
+.search__field:focus {
+  outline: 0;
+  border-bottom-color: var(--link);
+  box-shadow: 0 1px 0 0 var(--link);
 }
 
-button {
-  padding: 8px 16px;
-  border: 1px solid var(--ink-faint);
-  border-radius: 2px;
-  background: var(--control);
-  color: var(--ink);
-  font: 15px/1.5 var(--sans);
+.search__submit {
+  flex: 0 0 auto;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background: var(--ink);
+  color: var(--on-ink);
+  font: inherit;
+  font-size: 12px;
+  padding: 8px 17px;
   cursor: pointer;
 }
-button:hover { background: var(--control-hover); }
-button[disabled] { color: var(--ink-soft); cursor: default; }
+.search__submit:hover { background: #000; }
+.search__submit[disabled] {
+  background: var(--ink-muted);
+  border-color: var(--ink-muted);
+  cursor: default;
+}
+
+/* ---- utility row: About, Settings, the mode line, and the search timing ---- */
+
+.utility {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 22px;
+  font-size: 12px;
+}
+.utility__mode,
+.utility__mode:visited { color: var(--ink-muted); }
+.timing {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
 
 /* ---- home ---- */
 
-.home { padding-top: 22vh; text-align: center; }
-.home .search-form { max-width: 480px; margin: 0 auto; text-align: left; }
+.home {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 42px;
+  padding: 48px 24px;
+}
+.home__wordmark { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.home__wordmark .wordmark { font-size: 56px; }
+.tagline { margin: 0; font-size: 14px; letter-spacing: 0.02em; color: var(--ink-muted); }
+
+.home__search {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.home .search__field { font-size: 17px; padding-bottom: 10px; }
+.home .search__submit { font-size: 13px; padding: 10px 20px; }
+.home .utility { justify-content: center; }
+
+/* ---- masthead: every view but home ---- */
+
+.masthead {
+  display: flex;
+  justify-content: center;
+  border-bottom: 1px solid var(--rule);
+  padding: 22px 40px 16px;
+}
+.masthead__inner {
+  width: 100%;
+  max-width: var(--measure);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.masthead__row { display: flex; align-items: flex-end; gap: 22px; }
+.masthead .wordmark { font-size: 21px; padding-bottom: 9px; }
+
+/* ---- page column ---- */
+
+.page { display: flex; justify-content: center; padding: 30px 40px 56px; }
+.page__inner { width: 100%; max-width: var(--measure); }
 
 /* ---- results ---- */
 
-.results-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 0 12px;
-}
-.results-header .search-form { flex: 1 1 auto; }
-
-.rule {
-  border: 0;
-  border-top: 1px solid var(--ink-faint);
-  margin: 0 0 24px;
-}
-
-.results { list-style: none; margin: 0; padding: 0; }
-.results li { margin: 0 0 24px; }
-
-.result-title { font-size: 15px; text-decoration: underline; }
-.result-title-plain { font-size: 15px; color: var(--ink); }
-
-.result-url {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--url);
-  word-break: break-all;
-}
-
-.result-snippet {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--ink);
+.results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 30px; }
+.result { display: flex; flex-direction: column; gap: 6px; }
+.result__title { font-size: 19px; line-height: 1.3; }
+.result__title--plain { color: var(--ink); }
+.result__url { margin: 0; font-size: 12px; color: var(--ink-muted); word-break: break-all; }
+.result__snippet {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--body);
+  text-wrap: pretty;
   overflow: hidden;
-  max-height: 3.1em;
+  max-height: 3.2em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-.result-date { color: var(--ink-soft); }
+.result__date { color: var(--ink-muted); }
 
-/* ---- notice ---- */
+/* ---- notices ---- */
 
-.page-message { padding-top: 24px; }
-.notice { margin: 0 0 24px; color: var(--ink-soft); }
-.notice-alert { color: var(--notice); }
-.notice a { color: inherit; }
+.notice { margin: 0 0 24px; color: var(--body); }
+.notice--alert { color: var(--alert); }
+.notice a { color: inherit; text-decoration: underline; }
+.page-message { max-width: var(--measure); margin: 24px auto; padding: 0 24px; }
 
 /* ---- prose views ---- */
 
-.prose { padding-top: 24px; }
-.prose h1 { font-size: 22px; font-family: var(--serif); font-weight: normal; margin: 0 0 24px; }
-.prose h2 { font-size: 15px; font-weight: bold; margin: 24px 0 8px; }
-.prose p { margin: 0 0 16px; }
-.prose ul { margin: 0 0 16px; padding-left: 24px; }
-.prose li { margin-bottom: 8px; }
+.prose { color: var(--body); }
+.prose h1 {
+  margin: 0 0 22px;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+.prose h2 {
+  margin: 34px 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.prose p { margin: 0 0 16px; line-height: 1.65; }
+.prose ul { margin: 0 0 16px; padding-left: 20px; }
+.prose li { margin-bottom: 10px; line-height: 1.65; }
+.prose strong { font-weight: 600; color: var(--ink); }
 
 /* ---- settings ---- */
 
-.key-form { margin: 0 0 16px; }
-.key-form label { display: block; margin-bottom: 4px; }
+.fieldset { border: 0; margin: 0 0 8px; padding: 0; }
+
+.choice {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.choice input { accent-color: var(--link); }
+.choice input:disabled { cursor: default; }
+.choice input:disabled ~ .choice__name { color: var(--ink-muted); }
+.choice__default { font-weight: 400; font-size: 13px; color: var(--ink-muted); }
+.prose p.choice__body { margin: 6px 0 0 25px; font-size: 14px; line-height: 1.6; }
+.prose p.choice__note { margin: 6px 0 0 25px; font-size: 13px; line-height: 1.6; color: var(--alert); }
+.choice-group + .choice-group { margin-top: 22px; }
+
+.key-form { margin: 0; max-width: 420px; }
+.key-form label { display: block; margin-bottom: 8px; font-size: 13px; color: var(--ink-muted); }
 .key-input {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--ink-faint);
-  border-radius: 2px;
-  background: var(--field);
+  border: 0;
+  border-bottom: 1px solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  padding: 0 0 8px;
+  font: inherit;
   color: var(--ink);
-  font: 15px/1.5 var(--sans);
+  -webkit-appearance: none;
+  appearance: none;
 }
-
-/* Both inputs, so the settings field does not fall back to the UA's low-contrast default. */
-.search-input::placeholder, .key-input::placeholder { color: var(--ink-soft); }
-.key-buttons { display: flex; gap: 8px; margin-top: 12px; }
-.key-state { color: var(--ink-soft); font-size: 13px; }
-
-/* ---- footer ---- */
-
-.site-footer {
-  margin-top: 40px;
-  padding-top: 16px;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--ink-soft);
-  text-align: center;
+.key-input::placeholder { color: var(--ink-muted); }
+.key-input:focus {
+  outline: 0;
+  border-bottom-color: var(--link);
+  box-shadow: 0 1px 0 0 var(--link);
 }
-.site-footer a { color: var(--ink-soft); }
-.site-footer a:visited { color: var(--ink-soft); }
-.site-footer .sep { padding: 0 8px; }
-.mode-note { display: inline-block; }
+.key-buttons { display: flex; gap: 10px; margin-top: 18px; }
+.button-secondary {
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  padding: 8px 17px;
+  cursor: pointer;
+}
+.button-secondary:hover { background: var(--rule); }
+.button-secondary[disabled] { color: var(--ink-muted); border-color: var(--ink-muted); cursor: default; }
 
-@media (max-width: 479px) {
-  .home { padding-top: 12vh; }
-  .wordmark-large { font-size: 36px; }
-  .results-header { flex-direction: column; align-items: stretch; gap: 12px; }
-  .site-footer .sep { padding: 0 4px; }
+.prose p.state-line { margin: 16px 0 0; font-size: 13px; line-height: 1.6; color: var(--ink-muted); }
+
+@media (max-width: 560px) {
+  .masthead { padding: 16px 16px 12px; }
+  .masthead__row { flex-wrap: wrap; gap: 12px; }
+  /* The wordmark takes its own line so the field and its button keep a usable width at 320px. */
+  .masthead .wordmark { flex: 1 0 100%; padding-bottom: 0; }
+  .page { padding: 24px 16px 40px; }
+  .home { padding: 32px 16px; gap: 34px; }
+  .home__wordmark .wordmark { font-size: 42px; }
+  .utility { gap: 16px; }
+  .page-message { padding: 0 16px; }
 }
 </style>
 </head>
 <body>
 
 <noscript>
-  <p class="notice notice-alert page-message">
+  <p class="notice notice--alert page-message">
     This is a single HTML page that runs entirely in your browser, so it needs JavaScript
     enabled to search. Nothing else on this page will work without it.
   </p>
 </noscript>
 
+<!-- ---- Masthead: shown on every view but home ---- -->
+<header class="masthead" id="masthead" hidden>
+  <div class="masthead__inner">
+    <form class="masthead__row" id="masthead-form" role="search">
+      <p class="wordmark"><a href="#" data-wordmark>Froogle</a></p>
+      <label class="visually-hidden" for="masthead-input">Search the web</label>
+      <input class="search__field" id="masthead-input" name="q" type="search" autocomplete="off"
+             autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Search">
+      <button class="search__submit" type="submit" id="masthead-submit">Search</button>
+    </form>
+    <nav class="utility" aria-label="Site">
+      <a href="#about">About</a>
+      <a href="#settings">Settings</a>
+      <a class="utility__mode" href="#settings" data-mode-note></a>
+      <span class="timing" id="timing" hidden></span>
+    </nav>
+  </div>
+</header>
+
 <main>
 
 <!-- ---- Home ---- -->
 <section id="view-home" class="home" hidden>
-  <h1 class="wordmark wordmark-large" data-wordmark>Froogle</h1>
-  <form class="search-form" id="home-form" role="search">
-    <label class="visually-hidden" for="home-input">Search the web</label>
-    <input class="search-input" id="home-input" name="q" type="search" autocomplete="off"
-           autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Search the web">
-    <button type="submit" id="home-submit">Search</button>
+  <div class="home__wordmark">
+    <h1 class="wordmark" data-wordmark>Froogle</h1>
+    <p class="tagline">Fast ad-free search</p>
+  </div>
+  <form class="home__search" id="home-form" role="search">
+    <div class="search__row">
+      <label class="visually-hidden" for="home-input">Search the web</label>
+      <input class="search__field" id="home-input" name="q" type="search" autocomplete="off"
+             autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Search">
+      <button class="search__submit" type="submit" id="home-submit">Search</button>
+    </div>
+    <nav class="utility" aria-label="Site">
+      <a href="#about">About</a>
+      <a href="#settings">Settings</a>
+      <a class="utility__mode" href="#settings" data-mode-note></a>
+    </nav>
   </form>
 </section>
 
 <!-- ---- Results ---- -->
-<section id="view-results" hidden>
-  <div class="results-header">
-    <a class="wordmark wordmark-small" href="#" data-wordmark>Froogle</a>
-    <form class="search-form" id="results-form" role="search">
-      <label class="visually-hidden" for="results-input">Search the web</label>
-      <input class="search-input" id="results-input" name="q" type="search" autocomplete="off"
-             autocapitalize="off" autocorrect="off" spellcheck="false">
-      <button type="submit" id="results-submit">Search</button>
-    </form>
+<section id="view-results" class="page" hidden>
+  <div class="page__inner">
+    <h1 class="visually-hidden">Search results</h1>
+    <p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
+    <ul class="results" id="results"></ul>
   </div>
-  <hr class="rule">
-  <p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
-  <ul class="results" id="results"></ul>
 </section>
 
 <!-- ---- About ---- -->
-<section id="view-about" class="prose" hidden>
-  <h1 class="wordmark" data-wordmark>Froogle</h1>
+<section id="view-about" class="page" hidden>
+  <div class="page__inner prose">
+    <h1><span data-engine-name>Froogle</span></h1>
 
-  <p>
-    A free web search engine that is one HTML file. No tracking, no ads, no accounts, no cookies.
-    You can save the page and run it from your own computer.
-  </p>
+    <p>
+      <span data-engine-name>Froogle</span> is a fast ad-free search engine. It's like search
+      from 2005.
+    </p>
 
-  <h2>How it works</h2>
-  <p>
-    Results come from <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>, a web
-    search API.
-    <span data-when-shared hidden>There are two ways your search can reach them.</span>
-    <span data-when-solo hidden>Here is how your search reaches them.</span>
-    <span data-when-unknown hidden>There are up to two ways your search can reach them,
-      depending on how this copy of the page is hosted.</span>
-  </p>
-  <ul>
-    <li>
-      <strong>Direct.</strong> If a Keenable API key is available &mdash; one you saved in
-      <a href="#settings">Settings</a>, or one built into this copy of the page &mdash; your
-      browser calls Keenable itself. Your query never reaches a
-      <span data-engine-name>Froogle</span> server.
-    </li>
-    <li data-when-shared hidden>
-      <strong>Shared.</strong> With no key, your query passes through
-      <span data-engine-name>Froogle</span>'s own thin proxy,
-      which stores nothing and logs nothing, and forwards the search to Keenable.
-    </li>
-    <li data-when-solo hidden>
-      <strong>No shared mode.</strong> This copy of <span data-engine-name>Froogle</span> has no
-      proxy of its own to fall back on, so without a key it cannot search at all.
-    </li>
-    <li data-when-unknown hidden>
-      <strong>Shared.</strong> Some copies of <span data-engine-name>Froogle</span> are deployed
-      with a thin proxy of their own, which stores nothing and logs nothing. Where there is one, a
-      query with no key passes through it on its way to Keenable; where there is not, a key is
-      required. This page cannot tell which kind of copy it is until a search without a key tries
-      &mdash; so try one. If this copy has no proxy, the search will say so and ask you for a key.
-    </li>
-  </ul>
-  <p>
-    The mode in use is always shown at the bottom of every page.
-  </p>
+    <ul>
+      <li><strong>Fast:</strong> results in about 200ms</li>
+      <li>
+        <strong>Ad-free:</strong> no ads, ever. We use the free tier of Keenable's API so there's
+        no catch.
+      </li>
+      <li><strong>Simple:</strong> no AI, no personalization. It's a list of web links.</li>
+      <li>
+        <strong>Private:</strong> pretty good privacy compared to major search engines (see below
+        for details).
+      </li>
+    </ul>
 
-  <h2>Privacy</h2>
-  <p>
-    <span data-engine-name>Froogle</span> sets no cookies, runs no analytics, and includes no
-    third-party code. Your query is
-    kept in the part of the address after the <code>#</code>, which browsers never send to a
-    server, so it appears in no access log, no CDN log, and no <code>Referer</code> header.
-  </p>
-  <p>
-    An API key you save is held in your browser's local storage and is sent only to Keenable.
-    Whoever hosts this page can see that the page was requested, never what was searched. Keenable
-    sees the query, and in direct mode your IP address.
-  </p>
+    <p>
+      <span data-engine-name>Froogle</span> is powered by the
+      <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a> API. It's not
+      associated with Keenable.
+    </p>
 
-  <h2>Elsewhere</h2>
-  <p>
-    <a href="https://github.com/scosman/froogle" rel="noopener noreferrer">Source code</a>
-    &middot;
-    <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>
-  </p>
+    <h2>Privacy</h2>
+    <p>
+      Our search is powered by the <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>
+      API. Keenable will see all search queries and may track your requests. See their
+      <!-- Keenable publishes no policy URL we have been able to verify, so this points at their
+           site rather than at a guessed /privacy path that may 404. -->
+      <a href="https://keenable.ai" rel="noopener noreferrer">privacy policy</a> for details.
+    </p>
+
+    <p>
+      On the <span data-engine-name>Froogle</span> side there are two modes with different privacy
+      tradeoffs:
+    </p>
+    <ul>
+      <li>
+        <strong>Proxied mode (default):</strong> queries are proxied through
+        <span data-engine-name>Froogle</span>'s servers to the Keenable API. Nothing is logged or
+        tracked by <span data-engine-name>Froogle</span> servers. Keenable may still log and track,
+        but we don't pass them any personal identifier or your IP, so your traffic is mixed with
+        other <span data-engine-name>Froogle</span> users. This mode may hit rate limits. Zero
+        setup.
+      </li>
+      <li>
+        <strong>Direct mode:</strong> you can enter a Keenable API key, which is saved to your
+        browser's local storage. All requests go directly from your browser to Keenable;
+        <span data-engine-name>Froogle</span> never sees your queries. You'll need to create an
+        account with Keenable and set this mode up. Keenable will be able to identify you via this
+        unique API key.
+      </li>
+    </ul>
+    <p>You can change your mode in <a href="#settings">settings</a>.</p>
+
+    <h2>Self hosting</h2>
+    <p>
+      <span data-engine-name>Froogle</span> is open source. You can download it and self host. It
+      can be as simple as saving <code>index.html</code>. See
+      <a href="https://github.com/scosman/froogle" rel="noopener noreferrer">Froogle on GitHub</a>.
+    </p>
+  </div>
 </section>
 
 <!-- ---- Settings ---- -->
-<section id="view-settings" class="prose" hidden>
-  <h1 class="wordmark" data-wordmark>Froogle</h1>
+<section id="view-settings" class="page" hidden>
+  <div class="page__inner prose">
+    <h1>Settings</h1>
 
-  <h2>Your own Keenable key</h2>
-  <p data-when-shared hidden>
-    Without a key, searches share one allowance with everyone else using this page. With your own
-    key they go straight to Keenable from your browser &mdash; nothing touches a
-    <span data-engine-name>Froogle</span> server,
-    and Keenable's free tier is far larger than the shared allowance.
-  </p>
-  <p data-when-solo hidden>
-    This copy of <span data-engine-name>Froogle</span> has no shared allowance behind it, so it
-    needs a Keenable key of its own before it can search anything. Searches then go straight to
-    Keenable from your browser &mdash; nothing touches a
-    <span data-engine-name>Froogle</span> server.
-  </p>
-  <p data-when-unknown hidden>
-    With your own key, searches go straight to Keenable from your browser &mdash; nothing touches a
-    <span data-engine-name>Froogle</span> server, and Keenable's free tier is far larger than any
-    shared allowance. Whether this copy of <span data-engine-name>Froogle</span> has a shared
-    allowance to fall back on without a key depends on how it is hosted, and it will not be known
-    until a search tries.
-  </p>
-  <p>
-    Keys are free from
-    <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>.
-    The key stays in this browser and is sent only to Keenable.
-  </p>
+    <h2>Search mode</h2>
+    <fieldset class="fieldset" id="mode-choices">
+      <legend class="visually-hidden">Search mode</legend>
 
-  <form class="key-form" id="key-form">
-    <label for="key-input">Keenable API key</label>
-    <input class="key-input" id="key-input" type="password" autocomplete="off"
-           autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="keen_…">
-    <div class="key-buttons">
-      <button type="submit" id="key-save">Save</button>
-      <button type="button" id="key-clear">Clear</button>
-    </div>
-  </form>
+      <div class="choice-group">
+        <label class="choice" for="mode-proxied">
+          <input type="radio" name="mode" value="proxied" id="mode-proxied">
+          <span class="choice__name">Proxied</span>
+          <span class="choice__default">default</span>
+        </label>
+        <p class="choice__body">
+          Queries are proxied through <span data-engine-name>Froogle</span>'s servers to the
+          Keenable API. Nothing is logged or tracked by <span data-engine-name>Froogle</span>
+          servers. Keenable may still log and track, but we don't pass them any personal
+          identifier or your IP, so your traffic is mixed with other
+          <span data-engine-name>Froogle</span> users. This mode may hit rate limits. Zero setup.
+        </p>
+        <p class="choice__note" id="proxy-note" hidden></p>
+      </div>
 
-  <p class="key-state" id="key-state" role="status" aria-live="polite"></p>
+      <div class="choice-group">
+        <label class="choice" for="mode-direct">
+          <input type="radio" name="mode" value="direct" id="mode-direct">
+          <span class="choice__name">Direct</span>
+        </label>
+        <p class="choice__body">
+          All requests go directly from your browser to Keenable, using the API key you save
+          below; <span data-engine-name>Froogle</span> never sees your queries. You'll need to
+          create an account with Keenable and set this mode up. Keenable will be able to identify
+          you via this unique API key.
+        </p>
+      </div>
+    </fieldset>
+    <p class="state-line" id="mode-state" role="status" aria-live="polite"></p>
+
+    <h2>Keenable API key</h2>
+    <p>
+      Direct mode needs a Keenable API key. Keys are free from
+      <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>. The key stays in this
+      browser and is sent only to Keenable — never to a
+      <span data-engine-name>Froogle</span> server. It is kept separately from the mode above, so
+      switching back to Proxied does not throw it away.
+    </p>
+
+    <form class="key-form" id="key-form">
+      <label for="key-input">Keenable API key</label>
+      <input class="key-input" id="key-input" type="password" autocomplete="off"
+             autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="keen_…">
+      <div class="key-buttons">
+        <button class="search__submit" type="submit" id="key-save">Save</button>
+        <button class="button-secondary" type="button" id="key-clear">Clear</button>
+      </div>
+    </form>
+
+    <p class="state-line" id="key-state" role="status" aria-live="polite"></p>
+  </div>
 </section>
 
 </main>
-
-<footer class="site-footer">
-  <a href="#about">About</a><span class="sep">&middot;</span><a href="#settings">Settings</a><span class="sep">&middot;</span><span class="mode-note" id="mode-note"></span>
-</footer>
 
 <script>
 /* ------------------------------------------------------------------
@@ -406,6 +540,9 @@ const MAX_DISPLAY_URL = 96;
    constant without reaching outside its own region, so callers pass the name in and this stands in
    when they pass nothing. */
 const DEFAULT_ENGINE_NAME = "Froogle";
+
+/* The mode a visitor gets before they have ever chosen one: no key to obtain, nothing to set up. */
+const DEFAULT_MODE = "proxied";
 
 function resolveEngineName(name) {
   return typeof name === "string" && name.trim() ? name.trim() : DEFAULT_ENGINE_NAME;
@@ -473,8 +610,8 @@ function buildRequestBody(parsed) {
    An unrecognized mode throws rather than falling through to the proxy: "anything that is not
    direct" would quietly aim a real request at PROXY_PATH the moment a mode value goes wrong. */
 function searchRequest({ mode, key, body, directUrl, proxyPath } = {}) {
-  if (mode !== "direct" && mode !== "shared") {
-    throw new Error("searchRequest: mode must be \"direct\" or \"shared\"");
+  if (mode !== "direct" && mode !== "proxied") {
+    throw new Error("searchRequest: mode must be \"direct\" or \"proxied\"");
   }
   const direct = mode === "direct";
   const headers = { "Content-Type": "application/json", "Accept": "application/json" };
@@ -557,17 +694,42 @@ function resolveKey(configKey, stored) {
   return saved || null;
 }
 
-/* The whole hybrid decision, in one place. Computed per search rather than cached, so saving or
-   clearing a key takes effect immediately with no reload. */
-function selectMode({ key, protocol, proxyKnownBad, proxyPath } = {}) {
-  if (typeof key === "string" && key) return "direct";
-  if (protocol === "file:") return "nokey";
-  if (!proxyPath) return "nokey";
-  if (proxyKnownBad) return "nokey";
-  return "shared";
+/* The stored preference, defended against a hand-edited localStorage value. Anything that is not
+   one of the two modes is the default rather than an error: this is a preference, not input. */
+function normalizeMode(value) {
+  return value === "direct" || value === "proxied" ? value : DEFAULT_MODE;
 }
 
-/* Whether a shared-mode failure proves the proxy is not there at all, as opposed to a search that
+/* What this copy of the page can say about its proxy, before any preference is applied.
+
+   "blocked" is structural and permanent: a file:// copy has no server behind it, and an empty
+   PROXY_PATH is a self-hoster switching the proxy off. "missing" is learned — a request came back
+   proving nothing answers at PROXY_PATH — and lasts the session. "possible" includes "nothing has
+   asked yet", because PROXY_PATH is relative by design and so cannot be inspected without a real
+   request. */
+function proxyStatus({ protocol, proxyPath, proxyKnownBad } = {}) {
+  if (protocol === "file:" || !proxyPath) return "blocked";
+  if (proxyKnownBad) return "missing";
+  return "possible";
+}
+
+/* The visitor's chosen mode, constrained by what this copy of the page can actually do. The
+   preference wins wherever it can be honoured; where it cannot — Proxied on a file:// copy, or
+   Direct with no key saved — the result differs from the preference and the UI is expected to say
+   so plainly rather than quietly substituting something else. The preference itself is never
+   rewritten, so a later deployment that does have a proxy honours it without re-choosing.
+
+   Computed per search rather than cached, so saving a key or switching mode takes effect
+   immediately with no reload. */
+function selectMode({ preference, key, protocol, proxyKnownBad, proxyPath } = {}) {
+  if (normalizeMode(preference) === "proxied"
+      && proxyStatus({ protocol, proxyPath, proxyKnownBad }) === "possible") {
+    return "proxied";
+  }
+  return typeof key === "string" && key.trim() ? "direct" : "nokey";
+}
+
+/* Whether a proxied-mode failure proves the proxy is not there at all, as opposed to a search that
    failed. Only the unambiguous cases count, because the consequence lasts the whole session: 404
    and 405 are a static host answering for a path with no function behind it, and "unreadable" is
    one answering it with a page — a single-page-app fallback serves index.html for the proxy path
@@ -580,9 +742,8 @@ function selectMode({ key, protocol, proxyKnownBad, proxyPath } = {}) {
 
    Status 0 is deliberately absent, though it used to be here. It means fetch rejected, and on a
    same-origin path that is a dropped connection rather than a CORS block — one bad moment on a
-   phone would otherwise downgrade the entire session to "add your own key" and, worse, flip the
-   About page to "this copy has no proxy of its own", which would then be false. A 5xx and a
-   "timeout" are absent for the same reason: something is there and having a bad minute. */
+   phone would otherwise downgrade the entire session to "add your own key". A 5xx and a "timeout"
+   are absent for the same reason: something is there and having a bad minute. */
 function proxyUnavailable(status) {
   return status === 404 || status === 405 || status === "unreadable";
 }
@@ -662,31 +823,52 @@ function formatDate(iso) {
   return MONTH_NAMES[date.getUTCMonth()] + " " + date.getUTCDate() + ", " + date.getUTCFullYear();
 }
 
-/* Reduces a failure to display text. `status` is an HTTP status, or "timeout", or "nokey" for the
-   deployment that has neither a key nor a proxy. No raw status code reaches the UI. */
+/* The measured round trip of the search on screen, for the utility row. Two decimals of a second
+   is the resolution the About page's "about 200ms" claim is made at; anything finer is noise, and
+   a fabricated number would be worse than none. Null for anything that is not a real measurement,
+   so the caller shows nothing rather than "NaN seconds". */
+function formatElapsed(ms) {
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return null;
+  return (ms / 1000).toFixed(2) + " seconds";
+}
+
+/* Reduces a failure to display text. `status` is an HTTP status, or "timeout", or one of the two
+   sentinels for a search that never left the page: "nokey" (Direct was chosen and no key is
+   saved) and "noproxy" (Proxied was chosen and there is no proxy here). No raw status code
+   reaches the UI. */
 function errorMessage({ status, mode, engineName } = {}) {
-  const shared = mode === "shared";
+  const proxied = mode === "proxied";
   const name = resolveEngineName(engineName);
   if (status === "nokey") {
     return {
-      text: "This copy of " + name + " needs your own Keenable API key to search. Keys are free.",
+      text: "Direct mode needs a Keenable API key to search. Keys are free.",
       action: "settings",
     };
+  }
+  if (status === "noproxy") {
+    /* Two ways to end up here, and they need different advice: a key is already saved, so the
+       next search falls back to Direct on its own, or there is none and the visitor has to add
+       one. */
+    return mode === "direct"
+      ? { text: "This copy of " + name + " has no proxy of its own. Search again and it will go "
+               + "straight to Keenable with your key.", action: null }
+      : { text: "This copy of " + name + " has no proxy of its own. Switch to Direct mode and add "
+               + "a free Keenable API key.", action: "settings" };
   }
   if (status === "timeout") {
     return { text: "That search took too long. Try again.", action: null };
   }
   if (status === 429) {
-    return shared
-      ? { text: name + "'s shared allowance is busy right now. Wait a moment, or add your own "
-              + "free Keenable key.", action: "settings" }
+    return proxied
+      ? { text: name + "'s proxy is busy right now. Wait a moment, or switch to Direct mode with "
+              + "your own free Keenable key.", action: "settings" }
       : { text: "Too many searches. Keenable allows a limited number per hour — wait a few "
               + "minutes and try again.", action: null };
   }
-  if ((status === 401 || status === 403) && !shared) {
+  if ((status === 401 || status === 403) && !proxied) {
     return { text: "Keenable rejected that API key.", action: "settings" };
   }
-  if (status === 402 && !shared) {
+  if (status === 402 && !proxied) {
     return { text: "This Keenable account is out of credits.", action: null };
   }
   if (status === 400) {
@@ -719,17 +901,57 @@ function keyCheckResult(outcome) {
   return { save: true, text: "Key saved, but it could not be checked just now." };
 }
 
-function modeIndicator(mode, engineName) {
-  if (mode === "direct") {
-    return { text: "Direct: your searches go straight to Keenable.", action: null };
+/* The always-visible mode line in the utility row, on every view. It names the mode a search
+   started right now would actually use, which is why "nokey" gets its own wording rather than
+   showing "Direct" for a page that cannot search. It is always a link to Settings, so the line
+   that reports the mode is also the way to change it. */
+function modeLabel(mode) {
+  if (mode === "proxied") return "Mode: Proxied";
+  if (mode === "direct") return "Mode: Direct";
+  return "Mode: no key";
+}
+
+/* The one-line reason the Proxied choice cannot be honoured here, or null when it can. */
+function proxyNote(status, engineName) {
+  const name = resolveEngineName(engineName);
+  if (status === "blocked") {
+    return "Not available here: this copy of " + name + " has no server behind it to proxy "
+      + "through, so searches use Direct instead.";
   }
-  if (mode === "shared") {
-    return {
-      text: "Queries proxied through " + resolveEngineName(engineName) + ". Zero logs.",
-      action: null,
-    };
+  if (status === "missing") {
+    return "This copy of " + name + " has no proxy — switch to Direct and add a key.";
   }
-  return { text: "No API key set.", action: "settings" };
+  return null;
+}
+
+/* What Settings says searches will actually do. When the chosen mode is the one in use this is a
+   plain restatement; when it is not, it is the only place that says which one is running instead
+   and why the choice above is still shown as chosen. */
+function modeStateText({ preference, effective, engineName } = {}) {
+  const wanted = normalizeMode(preference);
+  const name = resolveEngineName(engineName);
+  if (effective === wanted) {
+    return wanted === "proxied"
+      ? "Searches go through " + name + "'s proxy."
+      : "Searches go straight from this browser to Keenable.";
+  }
+  if (wanted === "proxied") {
+    return effective === "direct"
+      ? "Proxied is not available here, so searches go straight to Keenable with your saved key."
+      : "Proxied is not available here, so searching needs a Keenable API key.";
+  }
+  return "Direct mode needs a Keenable API key before it can search.";
+}
+
+/* The line under the key form: what key, if any, this browser will use. It deliberately says
+   nothing about the mode — the line under the radios above owns that — so the two cannot drift
+   into contradicting each other. */
+function keyStateText({ builtIn, saved, engineName } = {}) {
+  if (builtIn) {
+    return "This copy of " + resolveEngineName(engineName) + " has a key built in, which takes "
+      + "precedence over anything saved here.";
+  }
+  return saved ? "A key is saved in this browser." : "No key is saved in this browser.";
 }
 
 // ---- FROOGLE:CORE:END ----
@@ -743,6 +965,7 @@ function modeIndicator(mode, engineName) {
 const ENGINE_NAME = resolveEngineName(SEARCH_ENGINE_NAME);
 
 const STORAGE_KEY = "froogle.key";
+const MODE_KEY = "froogle.mode";
 const PROXY_UNAVAILABLE_KEY = "froogle.proxyUnavailable";
 
 const state = {
@@ -751,6 +974,7 @@ const state = {
   status: "idle",
   results: [],
   error: null,
+  elapsedMs: null,
   seq: 0,
 };
 
@@ -761,25 +985,30 @@ const el = {
     about: document.getElementById("view-about"),
     settings: document.getElementById("view-settings"),
   },
+  masthead: document.getElementById("masthead"),
   homeForm: document.getElementById("home-form"),
   homeInput: document.getElementById("home-input"),
-  resultsForm: document.getElementById("results-form"),
-  resultsInput: document.getElementById("results-input"),
+  mastheadForm: document.getElementById("masthead-form"),
+  mastheadInput: document.getElementById("masthead-input"),
   homeSubmit: document.getElementById("home-submit"),
-  resultsSubmit: document.getElementById("results-submit"),
+  mastheadSubmit: document.getElementById("masthead-submit"),
   notice: document.getElementById("notice"),
   resultList: document.getElementById("results"),
-  modeNote: document.getElementById("mode-note"),
+  timing: document.getElementById("timing"),
+  /* One mode line per utility row — home has its own, the masthead carries the other — rendered
+     from the same state by the same function, so they cannot disagree. */
+  modeNotes: document.querySelectorAll("[data-mode-note]"),
+  modeChoices: document.getElementById("mode-choices"),
+  modeProxied: document.getElementById("mode-proxied"),
+  modeDirect: document.getElementById("mode-direct"),
+  proxyNote: document.getElementById("proxy-note"),
+  modeState: document.getElementById("mode-state"),
   keyForm: document.getElementById("key-form"),
   keyInput: document.getElementById("key-input"),
   keySave: document.getElementById("key-save"),
   keyClear: document.getElementById("key-clear"),
   keyState: document.getElementById("key-state"),
   favicon: document.getElementById("favicon"),
-  /* The two halves of the prose that only one kind of deployment can honestly print. */
-  whenShared: document.querySelectorAll("[data-when-shared]"),
-  whenSolo: document.querySelectorAll("[data-when-solo]"),
-  whenUnknown: document.querySelectorAll("[data-when-unknown]"),
 };
 
 /* ---- storage ------------------------------------------------------
@@ -813,10 +1042,11 @@ function removeStore(store, key) {
 }
 
 /* Render bookkeeping: the view we last drew, so the home input is focused on arrival rather than
-   on every render, and a settings message that persists across renders until the next
-   navigation clears it. */
+   on every render, and settings messages that persist across renders until the next navigation
+   clears them. */
 let previousView = null;
 let keyFeedback = "";
+let modeFeedback = "";
 let keyChecking = false;
 /* Bumped by each save attempt and by every navigation, so a slow validation cannot surface its
    message after the visitor has moved on. The key itself is still stored — that part was asked
@@ -826,14 +1056,15 @@ let keyCheckSeq = 0;
 /* What this page has learned about the proxy, mirrored in memory.
 
    `proxyMissing` exists because writeStore returns false in Safari's "block all cookies", and
-   without a mirror the page would go on believing it has a shared allowance while the notice in
-   front of the visitor says it has none — exactly the disagreement keyStateText forbids. It also
-   removes the wasted request per search that a blocked store would otherwise cost.
-
-   `proxyAnswered` is the other half, and it is not persisted: it costs one keyless search to
-   re-establish, and keeping it out of storage keeps this page to the one documented session key. */
+   without a mirror the page would go on believing it has a proxy while the notice in front of the
+   visitor says it has none. It also removes the wasted request per search that a blocked store
+   would otherwise cost. */
 let proxyMissing = false;
-let proxyAnswered = false;
+
+/* The chosen mode when localStorage refuses to remember it, for the same reason: a radio that
+   snaps back with no explanation is worse than one that works for this tab and says it will be
+   forgotten. Cleared again as soon as a write succeeds. */
+let modeMemory = null;
 
 const storedKey = () => readStore(localStorage, STORAGE_KEY);
 const proxyKnownBad = () =>
@@ -845,17 +1076,22 @@ function markProxyMissing() {
 }
 
 const currentKey = () => resolveKey(API_KEY, storedKey());
+const modePreference = () => normalizeMode(modeMemory ?? readStore(localStorage, MODE_KEY));
+const currentProxyStatus = () => proxyStatus({
+  protocol: location.protocol,
+  proxyPath: PROXY_PATH,
+  proxyKnownBad: proxyKnownBad(),
+});
 
-/* The single source of truth for which of the three modes this page is in. The footer indicator,
-   the Settings key-state line, the About and Settings deployment prose and the search path all
-   derive from it, so they cannot disagree.
+/* The single source of truth for the mode a search would use right now. The utility-row mode line,
+   the Settings state line and the search path all derive from it, so they cannot disagree.
 
    The key is a parameter so a caller that has already resolved it — the search path, which needs
    the key itself for the header — cannot end up deciding the mode from a different answer than
-   the one it sends. Nothing here is cached: saving a key, clearing one, or discovering that the
-   proxy is not there takes effect on the very next render. */
+   the one it sends. */
 function currentMode(key = currentKey()) {
   return selectMode({
+    preference: modePreference(),
     key,
     protocol: location.protocol,
     proxyKnownBad: proxyKnownBad(),
@@ -918,7 +1154,7 @@ function renderNotice() {
     fillMessage(notice, { text: "No results found for " + state.query + ".", action: null });
     return;
   }
-  notice.className = "notice notice-alert";
+  notice.className = "notice notice--alert";
   fillMessage(notice, errorMessage({ ...state.error, engineName: ENGINE_NAME }));
 }
 
@@ -929,11 +1165,12 @@ function renderNotice() {
    of the document. */
 function resultItem(result) {
   const item = document.createElement("li");
+  item.className = "result";
   const url = typeof result.url === "string" ? result.url : "";
   const linkable = isLinkableUrl(url);
 
   const title = document.createElement(linkable ? "a" : "span");
-  title.className = linkable ? "result-title" : "result-title-plain";
+  title.className = linkable ? "result__title" : "result__title result__title--plain";
   title.textContent = resultTitle(result);
   if (linkable) {
     title.href = url;
@@ -942,8 +1179,8 @@ function resultItem(result) {
   item.appendChild(title);
 
   if (url) {
-    const line = document.createElement("div");
-    line.className = "result-url";
+    const line = document.createElement("p");
+    line.className = "result__url";
     line.textContent = displayUrl(url);
     item.appendChild(line);
   }
@@ -952,10 +1189,10 @@ function resultItem(result) {
   const snippet = normalizeSnippet(pickSnippet(result));
   if (date || snippet) {
     const paragraph = document.createElement("p");
-    paragraph.className = "result-snippet";
+    paragraph.className = "result__snippet";
     if (date) {
       const stamp = document.createElement("span");
-      stamp.className = "result-date";
+      stamp.className = "result__date";
       stamp.textContent = snippet ? date + " — " : date;
       paragraph.appendChild(stamp);
     }
@@ -972,69 +1209,42 @@ function renderResults() {
   for (const result of state.results) el.resultList.appendChild(resultItem(result));
 }
 
-/* The mode line is the link when there is no key, rather than growing a second "Open settings"
-   next to the Settings link the footer already carries. */
-function renderFooter() {
-  const { text, action } = modeIndicator(currentMode(), ENGINE_NAME);
-  clear(el.modeNote);
-  if (action === "settings") {
-    el.modeNote.appendChild(settingsLink(text));
-  } else {
-    el.modeNote.appendChild(document.createTextNode(text));
-  }
+function renderModeLine() {
+  const label = modeLabel(currentMode());
+  for (const node of el.modeNotes) node.textContent = label;
 }
 
-/* Whether a keyless visitor here would get shared mode at all — "shared", "solo", or "unknown".
-
-   It is a property of where the page is running rather than of whether a key happens to be saved
-   right now, so it is asked with the key forced absent; otherwise the About and Settings prose
-   would rewrite itself every time someone saved a key.
-
-   "unknown" is a real third answer, not a placeholder. PROXY_PATH is relative and deliberately
-   carries no host, so this page genuinely cannot tell a deployment with a Function behind it from
-   a lone index.html on a static host until something has answered there — and only a keyless
-   search ever asks. On a static host whose operator baked in an API_KEY, nobody is ever keyless,
-   so nothing ever asks and a guess would stand uncorrected for the life of the deployment. The
-   prose therefore claims a shared allowance only once one has actually answered, and claims there
-   is none only when that is structurally true: file://, no PROXY_PATH, or a probe that came back
-   proving nothing is there. */
-function deploymentSharing() {
-  if (currentMode(null) !== "shared") return "solo";
-  return proxyAnswered ? "shared" : "unknown";
+/* Real measured time or nothing: the number in the reference design is a promise about this
+   deployment's speed, and a fabricated one would be a lie the visitor cannot check. */
+function renderTiming() {
+  const measured = state.view === "results" && (state.status === "ok" || state.status === "empty")
+    ? formatElapsed(state.elapsedMs)
+    : null;
+  el.timing.hidden = !measured;
+  el.timing.textContent = measured || "";
 }
 
-/* Static prose that only one kind of deployment can print honestly. Toggled rather than rewritten,
-   so every wording stays readable in the HTML, keeps its markup, and keeps its engine-name
-   spans. */
-function renderDeploymentProse() {
-  const sharing = deploymentSharing();
-  for (const node of el.whenShared) node.hidden = sharing !== "shared";
-  for (const node of el.whenSolo) node.hidden = sharing !== "solo";
-  for (const node of el.whenUnknown) node.hidden = sharing !== "unknown";
-}
+/* The chosen mode, whether it can be honoured here, and what searches therefore do. Proxied is
+   disabled only where it is structurally impossible — a file:// copy, or a PROXY_PATH switched
+   off — and never merely because a probe found nothing: that copy may be redeployed with a proxy
+   behind it, and the stored preference has to survive to be honoured when it is. */
+function renderModeChoice() {
+  const preference = modePreference();
+  const status = currentProxyStatus();
+  el.modeProxied.checked = preference === "proxied";
+  el.modeDirect.checked = preference === "direct";
+  el.modeProxied.disabled = status === "blocked";
 
-/* Derived from currentMode() rather than from storage directly, so this line cannot promise a
-   shared allowance while the footer just below it — and the search path — say there is no way to
-   search at all. It reports whatever the mode actually is, on file:// where there has never been a
-   proxy, on a static host where the first search has just discovered there is none, and on a
-   deployment where the proxy answers. */
-function keyStateText() {
-  const mode = currentMode();
-  if (mode === "direct") {
-    return typeof API_KEY === "string" && API_KEY.trim()
-      ? "This copy of " + ENGINE_NAME + " has a key built in, which takes precedence "
-        + "over anything saved here."
-      : "Using a key stored in this browser.";
-  }
-  if (mode === "shared") {
-    /* "will try", not "use": until a search has actually reached the proxy this is a statement
-       about what the next one will attempt, not about what this deployment has. The deployment
-       prose a few hundred pixels above says it does not know yet, and a flat present tense here
-       would contradict it on the same screen. */
-    return "No key set — searches will try " + ENGINE_NAME + "'s shared allowance.";
-  }
-  return "No key set, and this copy of " + ENGINE_NAME + " has no shared allowance to fall back "
-    + "on, so searching needs a key.";
+  const note = proxyNote(status, ENGINE_NAME);
+  el.proxyNote.hidden = !note;
+  el.proxyNote.textContent = note || "";
+
+  const explanation = modeStateText({
+    preference,
+    effective: currentMode(),
+    engineName: ENGINE_NAME,
+  });
+  el.modeState.textContent = modeFeedback ? modeFeedback + " " + explanation : explanation;
 }
 
 /* Clear is disabled alongside Save so a check cannot land after the visitor has asked for the key
@@ -1042,24 +1252,31 @@ function keyStateText() {
 function renderKeyState() {
   el.keySave.disabled = keyChecking;
   el.keyClear.disabled = keyChecking;
-  el.keyState.textContent = keyFeedback ? keyFeedback + " " + keyStateText() : keyStateText();
+  const line = keyStateText({
+    builtIn: typeof API_KEY === "string" && Boolean(API_KEY.trim()),
+    saved: Boolean((storedKey() || "").trim()),
+    engineName: ENGINE_NAME,
+  });
+  el.keyState.textContent = keyFeedback ? keyFeedback + " " + line : line;
 }
 
 function render() {
   const arrivedAt = state.view !== previousView;
   for (const [name, node] of Object.entries(el.views)) node.hidden = name !== state.view;
+  el.masthead.hidden = state.view === "home";
   previousView = state.view;
 
-  el.resultsInput.value = state.query;
-  el.resultsSubmit.disabled = state.status === "searching";
+  el.mastheadInput.value = state.query;
+  el.mastheadSubmit.disabled = state.status === "searching";
   document.title = state.view === "results" && state.query
     ? state.query + " — " + ENGINE_NAME
     : ENGINE_NAME;
 
   renderNotice();
   renderResults();
-  renderFooter();
-  renderDeploymentProse();
+  renderModeLine();
+  renderTiming();
+  renderModeChoice();
   renderKeyState();
 
   if (arrivedAt && state.view === "home") el.homeInput.focus();
@@ -1155,32 +1372,35 @@ async function runSearch() {
   cancelSearch();
   const seq = state.seq;
 
-  /* Captured before the first render of this search, which is what disables the results submit
+  /* Captured before the first render of this search, which is what disables the masthead submit
      button and hides the home view. A browser drops focus to <body> when the element holding it
      goes away, and puts it nowhere when the button comes back up to 15s later, so it is moved to
      the search box — which stays populated for editing, and is the better place for it anyway.
      Every path below renders, the two early failures included, so this has to be read before any
      of them. */
-  let restoreFocus = keyboardFocusIsOn(el.resultsSubmit) || keyboardFocusIsOn(el.homeSubmit);
+  let restoreFocus = keyboardFocusIsOn(el.mastheadSubmit) || keyboardFocusIsOn(el.homeSubmit);
 
   /* The one render of this search that moves focus is whichever comes first. */
   const show = () => {
     render();
     if (restoreFocus) {
       restoreFocus = false;
-      el.resultsInput.focus();
+      el.mastheadInput.focus();
     }
   };
 
-  const fail = (status) => {
+  const fail = (status, failedMode = mode) => {
     state.status = "error";
     state.results = [];
-    state.error = { status, mode };
+    state.elapsedMs = null;
+    state.error = { status, mode: failedMode };
     show();
   };
 
   if (mode === "nokey") {
-    fail("nokey");
+    /* Which of the two ways to say it: the visitor chose Direct and has saved no key, or chose
+       Proxied where there is no proxy and has no key to fall back on. */
+    fail(modePreference() === "proxied" ? "noproxy" : "nokey");
     return;
   }
 
@@ -1196,27 +1416,33 @@ async function runSearch() {
   state.status = "searching";
   state.results = [];
   state.error = null;
+  state.elapsedMs = null;
   show();
 
   const controller = new AbortController();
   inFlight = controller;
+  const startedAt = performance.now();
   const outcome = await requestSearch(buildRequestBody(parsed), { mode, key, controller });
+  const elapsedMs = performance.now() - startedAt;
 
   /* A newer search has started, or the visitor has left the results view. Either way this answer
      is to a question nobody is asking any more. */
   if (seq !== state.seq) return;
   inFlight = null;
 
-  /* Every shared-mode search doubles as the proxy probe, because a relative PROXY_PATH is the only
+  /* Every proxied search doubles as the proxy probe, because a relative PROXY_PATH is the only
      thing this page knows about the proxy and nothing else ever asks. A copy of index.html sitting
      alone on a static host has nothing behind it, and the 404 that comes back is the only way to
-     find that out. Remembering it turns "one wasted request per search" into "one per session",
-     and every later search takes the nokey branch above before any request is made. The key prompt
-     is also the useful answer here, where "Search is unavailable right now" would be true but
-     would not tell the visitor what to do about it. */
-  if (mode === "shared" && proxyUnavailable(outcome.status)) {
+     find that out. Remembering it turns "one wasted request per search" into "one per session":
+     every later search selects a mode with the proxy already known bad, so it either goes direct
+     with a saved key or stops at the notice before any request is made. The stored preference is
+     deliberately left alone, so a later deploy that does have a proxy is honoured without the
+     visitor choosing again. */
+  if (mode === "proxied" && proxyUnavailable(outcome.status)) {
     markProxyMissing();
-    fail("nokey");
+    /* The mode the *next* search will fall back to, which is what decides whether this notice
+       asks for a key or just says to try again. */
+    fail("noproxy", currentMode(key));
     return;
   }
 
@@ -1225,16 +1451,10 @@ async function runSearch() {
     return;
   }
 
-  /* The other half of the probe, and the only proof this page ever gets that a proxy really is
-     there: a readable answer from PROXY_PATH. Until one arrives, the About and Settings prose
-     stays on its "unknown" wording rather than promising an allowance that may not exist. A
-     failure is deliberately not proof — a 500 or a 429 at that path could as easily come from a
-     static host or an edge rule as from a proxy. */
-  if (mode === "shared") proxyAnswered = true;
-
   state.results = outcome.results;
   state.status = outcome.results.length ? "ok" : "empty";
   state.error = null;
+  state.elapsedMs = elapsedMs;
   show();
 }
 
@@ -1248,12 +1468,28 @@ function startSearch() {
     console.error(error);
     state.status = "error";
     state.results = [];
+    state.elapsedMs = null;
     state.error = { status: 0, mode: currentMode() };
     render();
   });
 }
 
 /* ---- settings ---- */
+
+/* The mode is stored apart from the key, so switching to Proxied and back never destroys a saved
+   key, and a visitor who has not chosen gets the default. */
+function chooseMode(value) {
+  const mode = normalizeMode(value);
+  if (writeStore(localStorage, MODE_KEY, mode)) {
+    modeMemory = null;
+    modeFeedback = "";
+  } else {
+    modeMemory = mode;
+    modeFeedback = "This browser is blocking storage, so this choice will be forgotten when the "
+      + "tab closes.";
+  }
+  render();
+}
 
 /* A pasted key is checked against Keenable with a real search before it is stored, so a mistyped
    one is rejected here rather than at the next search. */
@@ -1321,6 +1557,7 @@ function normalizeLegacyUrl() {
    no hashchange but should still run the search again. */
 function applyRoute({ resubmitted = false } = {}) {
   keyFeedback = "";
+  modeFeedback = "";
   keyCheckSeq += 1;
   const route = parseRoute(location.hash, location.search);
   const queryChanged = route.query !== state.query;
@@ -1336,6 +1573,7 @@ function applyRoute({ resubmitted = false } = {}) {
   state.status = "idle";
   state.results = [];
   state.error = null;
+  state.elapsedMs = null;
   render();
 }
 
@@ -1369,8 +1607,9 @@ function applyEngineName() {
   const letter = ENGINE_NAME.charAt(0);
   const ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim();
   const svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>"
-    + "<text x='16' y='25' font-family='Georgia,serif' font-size='27' text-anchor='middle'"
-    + " fill='" + escapeXml(ink || "#202020") + "'>" + escapeXml(letter) + "</text></svg>";
+    + "<text x='16' y='24' font-family='Helvetica Neue,Helvetica,Arial,sans-serif'"
+    + " font-weight='500' font-size='26' letter-spacing='-1' text-anchor='middle'"
+    + " fill='" + escapeXml(ink || "#111111") + "'>" + escapeXml(letter) + "</text></svg>";
   el.favicon.href = "data:image/svg+xml," + encodeURIComponent(svg);
 }
 
@@ -1384,9 +1623,14 @@ function start() {
     submitSearch(el.homeInput);
   });
 
-  el.resultsForm.addEventListener("submit", (event) => {
+  el.mastheadForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    submitSearch(el.resultsInput);
+    submitSearch(el.mastheadInput);
+  });
+
+  el.modeChoices.addEventListener("change", (event) => {
+    if (event.target.name !== "mode") return;
+    chooseMode(event.target.value);
   });
 
   el.keyForm.addEventListener("submit", (event) => {
@@ -1424,7 +1668,7 @@ try {
   /* The console is the only place a stack can go: nothing about the failure reaches the UI. */
   console.error(error);
   const failure = document.createElement("p");
-  failure.className = "notice notice-alert page-message";
+  failure.className = "notice notice--alert page-message";
   failure.textContent = ENGINE_NAME + " could not start. If this copy has been edited, "
     + "check the configuration at the top of the file; the browser console has the details.";
   document.body.insertBefore(failure, document.body.firstChild);

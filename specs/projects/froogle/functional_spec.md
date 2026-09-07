@@ -19,31 +19,49 @@ Keenable's API is browser-callable, but not in every mode. Measured behavior (se
   browser holding a key can search directly. Measured: `POST /v1/search` with only `Content-Type`
   and `X-API-Key` returns 200.
 
-So the app has two request paths, and which one runs depends only on whether a key is available.
+So the app has two request paths. Which one runs is the **visitor's choice**, made in Settings and
+constrained only by what a given copy of the page can actually do.
 
 ## The two modes
 
-### Direct mode
+The mode is a stored preference — `froogle.mode` in `localStorage`, `"proxied"` or `"direct"`,
+defaulting to `"proxied"` — kept **separately from the key**, so switching modes never destroys a
+saved key and switching back needs no re-entry. Both wordings below are the ones the About page
+uses; Settings echoes them rather than inventing a second explanation.
 
-The browser calls `POST https://api.keenable.ai/v1/search` itself, with `X-API-Key`. Used whenever
-a key is available, from either:
+### Proxied mode (the default)
 
-* `API_KEY` — a config constant baked into `index.html` by a self-hoster, or
-* a key the visitor saved into `localStorage` through the settings view.
-
-Nothing touches a Froogle server. On the hosted instance, a visitor who saves a key never calls the
-proxy again.
-
-### Shared mode
-
-No key available. The browser calls Froogle's own proxy, which performs the search server-side and
-returns the same JSON shape. This is what a first-time visitor to the hosted instance gets.
+Queries are proxied through Froogle's own server to the Keenable API. Nothing is logged or tracked
+by Froogle. Keenable may still log and track, but no personal identifier and no visitor IP is
+passed to them, so a visitor's traffic is mixed with every other Froogle user's. It may hit rate
+limits. Zero setup — it is what a first-time visitor gets.
 
 The proxy tries the keyless endpoint first (it can send `X-Keenable-Title`, having no CORS
 constraint) and falls back to the operator's own API key when that fails.
 
-Mode is decided per request, at call time, so saving or clearing a key takes effect immediately
-with no reload.
+### Direct mode
+
+The visitor enters a Keenable API key, saved in their browser's `localStorage`. The browser calls
+`POST https://api.keenable.ai/v1/search` itself, with `X-API-Key`; nothing touches a Froogle server
+and Froogle never sees the queries. It needs a Keenable account, and Keenable can identify the
+visitor by that unique key.
+
+A key baked into the file by a self-hoster (`API_KEY`) is used the same way, and takes precedence
+over a saved one.
+
+### Where a choice cannot be honoured
+
+The preference wins wherever it can be honoured. Where it cannot, the page says so plainly rather
+than silently doing something else, and the stored preference is left untouched:
+
+| Chosen | Situation | What happens |
+|---|---|---|
+| Direct | No key saved | The search fails with "Direct mode needs a Keenable API key", linking to Settings. The radio stays on Direct |
+| Proxied | `file://`, or `PROXY_PATH` empty | Impossible — there is no server. The Proxied radio is shown disabled with a one-line reason, and searches use Direct |
+| Proxied | The proxy answers 404/405, or unparseably | The search says this copy has no proxy, and either points at Direct plus a key or, when a key is already saved, notes the next search will go direct. The preference survives, so a later deploy that does have a proxy is honoured with no re-choosing |
+
+Mode is computed per search, so saving a key or switching mode takes effect immediately with no
+reload.
 
 ## Deployment shapes
 
@@ -58,6 +76,8 @@ page. There is therefore no CORS configuration on Froogle's own proxy, no prefli
 allowlist to maintain. A self-hoster who wants only direct mode copies `index.html` and ignores the
 rest of the repo.
 
+The repo is MIT licensed; `LICENSE` sits at the root.
+
 ## Repo
 
 * `index.html` — the whole frontend: markup, CSS, JS. No frameworks, no build step, no
@@ -71,12 +91,12 @@ rest of the repo.
 
 | Name | Default | Meaning |
 |---|---|---|
-| `SEARCH_ENGINE_NAME` | `"Froogle"` | The engine's name everywhere it appears: wordmark, `<title>`, favicon letter, the About and Settings prose, the mode indicator, the key-state line, and the error messages that name it. Blank or whitespace-only falls back to `"Froogle"` |
+| `SEARCH_ENGINE_NAME` | `"Froogle"` | The engine's name everywhere it appears: wordmark, `<title>`, favicon letter, the About and Settings prose, the Settings state lines, and the error messages that name it. Blank or whitespace-only falls back to `"Froogle"` |
 | `API_KEY` | `""` | Baked-in Keenable key. Publishes the key if the page is public; intended for `file://`, intranet, and personal deploys |
 | `PROXY_PATH` | `"/api/search"` | Same-origin path to the proxy. Relative by design (see below) |
 
-Key resolution order: `API_KEY` → `localStorage` → none (shared mode if a proxy responds at
-`PROXY_PATH`, otherwise the no-key state).
+Key resolution order: `API_KEY` → `localStorage` → none. The key decides what Direct mode can do;
+it no longer decides the mode, which is the visitor's stored choice.
 
 `PROXY_PATH` is deliberately a **relative** path, and the repo ships deployable as-is:
 
@@ -86,16 +106,18 @@ Key resolution order: `API_KEY` → `localStorage` → none (shared mode if a pr
   is listening. A self-hosted copy therefore **cannot** reach the original operator's proxy — a
   structural guarantee, unlike a hardcoded domain check, which is a client-side string anyone can
   edit.
-* A self-hoster who deploys the whole repo gets shared mode against their own proxy and their own
+* A self-hoster who deploys the whole repo gets proxied mode against their own proxy and their own
   key, with no edits.
-* Over `file://` no proxy can exist, so the app short-circuits on `location.protocol === "file:"`
-  and never attempts one — no doomed request, no console error, straight to the key prompt.
+* Over `file://` no proxy can exist, so the app never offers the choice: Proxied is shown disabled
+  with its reason, and searches use Direct. No doomed request, no console error.
 
 Anywhere else, the first failure that **proves** nothing is listening — a 404, a 405, or a body
 that will not parse as JSON, which is what a static host answering the proxy path with an HTML page
 returns — marks the proxy unavailable for the rest of the session via `sessionStorage`, so a
-static-only deployment wastes one request per session rather than one per search, and every later
-search goes straight to the key prompt.
+static-only deployment wastes one request per session rather than one per search. Every later
+search then either goes direct with a saved key or stops at the notice before any request is made.
+The stored preference is deliberately **not** rewritten, so the same file redeployed behind a
+Function honours it again with nothing for the visitor to re-choose.
 
 A network failure is deliberately **not** one of those. It is indistinguishable from a dropped
 connection, and retiring the proxy on it would let one bad moment on a phone downgrade the whole
@@ -133,40 +155,45 @@ unlike `history.pushState`, which browsers block on `file://` URLs. Back and for
 
 ### Home
 
-Centered wordmark, a single text input, a submit button. Footer: About, Settings, mode indicator.
-Focus is placed in the input on load.
+Wordmark, tagline, a single text input and a submit button, centered in the viewport, with a
+utility row beneath: About, Settings, and the mode line. Focus is placed in the input on load.
 
-The mode indicator reads:
-
-* Direct — "Direct: your searches go straight to Keenable."
-* Shared — "Queries proxied through Froogle. Zero logs."
+The mode line names the mode a search started now would use — "Mode: Proxied", "Mode: Direct", or
+"Mode: no key" — and always links to Settings.
 
 ### Results
 
-Small wordmark top-left linking home, the search box beside it prefilled with the current query, a
-thin rule, then the result list. Same footer.
+A masthead: the wordmark linking home, the search box beside it prefilled with the current query,
+the submit button, then the utility row and a hairline. The utility row here also carries the
+measured round trip of the request, shown to two decimals of a second and omitted whenever there
+is nothing real to report. Then the result list.
+
+The same masthead and utility row appear on About and Settings, so every view but home can search.
 
 ### About
 
 Static prose in the same page. Content:
 
-* What Froogle is: a free single-page search engine, one HTML file, no tracking, no ads, no
-  accounts.
-* How it works: results come from Keenable. In direct mode your browser calls Keenable itself and
-  your query never reaches a Froogle server. In shared mode your query passes through Froogle's
-  proxy, which stores nothing and logs nothing.
-* Privacy, stated precisely rather than as a slogan: Froogle sets no cookies, runs no analytics,
-  and includes no third-party code. A saved API key is held in your browser's `localStorage` and is
-  sent only to Keenable. Whoever hosts the page can see that the page was requested, never what was
-  searched. Keenable sees the query and, in direct mode, your IP address.
-* A link to the source repo and to Keenable.
+* What Froogle is: a fast, ad-free search engine — "like search from 2005" — with four bullets:
+  fast, ad-free, simple, private.
+* That it is powered by the Keenable API and not associated with Keenable.
+* **Privacy.** Keenable sees every query and may track requests; their privacy policy is linked.
+  Then the two Froogle-side modes and their tradeoffs, in full — this is the canonical wording,
+  which Settings echoes — and a link to Settings to change the mode.
+* **Self hosting.** Froogle is open source, can be self-hosted, and can be as simple as saving
+  `index.html`. Links to the repo.
 
 ### Settings
 
-Explains the two modes and why a key helps: a personal key means searches go straight to Keenable,
-and Keenable's free tier is far larger than the shared allowance. A text input to paste a key, a
-Save, and a Clear. Links to Keenable's console to get one free. States that the key stays in this
-browser.
+Two radios, **Proxied** (default) and **Direct**, each with the About page's wording beneath it,
+then one line reporting what searches will actually do — which is the only place that can say the
+chosen mode is not the one running. Where Proxied cannot be honoured, a note under it gives the
+one-line reason; the radio is disabled only where a proxy is structurally impossible, never merely
+because a request found none.
+
+Below that, the key form: a text input, a Save, and a Clear, with a link to Keenable for a free
+key. The key is stored apart from the mode, so switching modes never throws it away, and its state
+line reports only what key this browser holds.
 
 Saving validates the key with a real search request before storing it, and reports failure rather
 than silently saving a bad key.
@@ -239,10 +266,11 @@ Only `http:` and `https:` result URLs are linked; anything else renders as plain
 
 ### Look
 
-Inspired by early-2000s web search, not a reproduction of any specific engine. Plain system fonts,
-a light background, a restrained palette chosen for this project. Underlined link titles, a muted
-URL line, generous whitespace, a comfortable maximum line length for readability. No logo artwork,
-no icons, no images of any kind.
+A plain white page, `#111` ink, a Helvetica-first stack, one blue link and one purple visited link,
+on a 660px measure. Fields are a bottom rule rather than a box; the submit button is solid ink with
+square corners. Grey secondary text for the URL line, the utility row and the search timing. No
+logo artwork, no icons, no images of any kind, no second typeface. See `ui_design.md` for the full
+token set — it supersedes the warm off-white and serif system this project shipped with.
 
 ## Proxy behavior
 
@@ -272,7 +300,7 @@ running a public instance is expected to put a platform rate-limiting rule (a Cl
 Limiting rule, or the equivalent on another host) in front of it.
 
 Keenable sees the proxy's egress IP, not the visitor's, so the keyless allowance is consumed per
-Cloudflare egress IP and shared with other traffic from that IP. The fallback to the operator's key
+Cloudflare egress IP and shared with all other traffic from that IP. The fallback to the operator's key
 exists precisely because that allowance is unpredictable.
 
 ## Error handling
@@ -283,13 +311,14 @@ so the query can be edited and retried. No error exposes a raw status code or st
 | Condition | Shown |
 |---|---|
 | 429, direct mode | Too many searches. Keenable allows a limited number per hour; wait a few minutes. |
-| 429, shared mode | Froogle's shared allowance is busy. Wait a moment, or add your own free key — with a link to Settings. |
+| 429, proxied mode | Froogle's proxy is busy. Wait a moment, or switch to Direct mode with your own free key — with a link to Settings. |
 | 401 / 403, direct mode | The API key was rejected — with a link to Settings. |
 | 402, direct mode | The account is out of credits. |
 | 400 | The search could not be understood — usually a malformed operator. |
 | 5xx, or network failure | Search is unavailable right now. Try again. |
 | Timeout / abort | The search took too long. Try again. |
-| No key and no proxy | Explains that Froogle needs a Keenable key in this deployment, with a link to Settings. |
+| Direct chosen, no key | Direct mode needs a Keenable API key. Keys are free — with a link to Settings. |
+| Proxied chosen, no proxy here | This copy has no proxy of its own. With no key: switch to Direct and add a free key, with a link to Settings. With a key already saved: search again and it will go straight to Keenable. |
 | Zero results | "No results found for <query>." No error styling. |
 
 Keenable sends `X-RateLimit-Limit`, `-Remaining`, and `-Reset`, but omits them from

@@ -8,16 +8,20 @@ One HTML file, four views, no images, no frameworks, no build step.
 
 ## Design intent
 
-Inspired by early-2000s web search: a wordmark, a box, a list of links, and nothing else. The
-reference is the *era*, not any one engine. Explicitly avoided, because they are specific to
-Google rather than to the period:
+A plain white page, one dark ink, one blue link, and a Helvetica-first stack. Nothing is
+decorated: there is no card, no shadow, no rounded corner, no icon, and no rule anywhere except
+the one under the masthead and the one under a text field. Type size and whitespace carry the
+whole hierarchy.
 
-* Multi-colored wordmark letters.
-* Their exact palette values — link blue `#1a0dab`, URL green `#006621`.
-* Their typefaces, logo forms, and layout measurements.
+The home view is a wordmark, a tagline, an underlined text field and three small links, centered
+in the viewport. The results view replaces all of it with a single row — wordmark, field, button —
+above a hairline, then a list. Both sit on the same 660px measure.
 
-What the period actually gives us, and what we take: heavy whitespace, a centered single-purpose
-home page, underlined text links, a dense unstyled-feeling result list, and no chrome.
+> **Supersedes the previous design.** Until this revision the page was a warm off-white
+> (`#fcfcfa`), a Georgia wordmark, a green URL line (`#2d6a4f`) and a boxed search field, in a
+> 640px column with a footer. That system is gone in full — palette, type, layout and footer — and
+> nothing here inherits from it. The mode indicator survived, moved from the footer into the
+> utility row.
 
 ## Design tokens
 
@@ -25,34 +29,39 @@ Declared once as CSS custom properties on `:root`.
 
 | Token | Value | Use |
 |---|---|---|
-| `--bg` | `#fcfcfa` | Page. Warm off-white, not pure white |
-| `--ink` | `#202020` | Body text, wordmark |
-| `--ink-soft` | `#5f5b54` | Dates, footer, secondary text, input placeholder |
-| `--url` | `#2d6a4f` | The URL line under a result title |
-| `--ink-faint` | `#8a857c` | Rules and borders only |
-| `--link` | `#1a3fb0` | Unvisited result titles |
-| `--link-visited` | `#6b2fa0` | Visited result titles |
-| `--notice` | `#8a4b1f` | Error and empty-state text |
-| `--focus` | `#1a3fb0` | Focus ring |
-| `--field` | `#ffffff` | Text input interiors |
-| `--control` | `#f1efe9` | Button face |
-| `--control-hover` | `#e8e5dd` | Button face, hover |
+| `--bg` | `#ffffff` | Page |
+| `--ink` | `#111111` | Headings, wordmark, field rules, button face |
+| `--on-ink` | `#ffffff` | Text on the dark button |
+| `--ink-muted` | `#6e6e6e` | Every piece of secondary text: tagline, utility row, URL line, timing, placeholders, state lines |
+| `--body` | `#3d3d3d` | Snippets and prose body |
+| `--link` | `#1734d4` | Links, result titles, focus ring, focused field rule |
+| `--link-visited` | `#6b2ea8` | Visited links |
+| `--alert` | `#b3261e` | Error notices and the "Proxied is unavailable" note |
+| `--rule` | `#eeeeee` | The masthead hairline, and the secondary button's hover face |
+| `--measure` | `660px` | Column width for the masthead and every page body |
 
-Type: `Georgia, "Times New Roman", serif` for the wordmark only; `system-ui, -apple-system,
-"Segoe UI", Roboto, sans-serif` for everything else. Sizes: 15px base, 13px secondary, 11px
-footer, 44px home wordmark, 22px header wordmark.
+Type: one stack, `"Helvetica Neue", Helvetica, "Segoe UI", "Liberation Sans", Arial, sans-serif`,
+for everything. No serif, no second family, nothing loaded from the network. Sizes: 15px base,
+56px home wordmark, 21px masthead wordmark, 28px page heading, 19px result title, 14px snippet and
+tagline, 12px utility row and URL line, 11px timing. The wordmark and the page heading are weight
+500 with negative tracking (`-0.035em` / `-0.025em`); section headings are 12px uppercase at
+`0.09em`.
 
-Spacing scale: 4, 8, 12, 16, 24, 40px. Nothing else.
+Spacing is not a strict scale — it is the reference mockups' own measurements, kept rather than
+rounded: 14px and 22px inside the search rows, 30px between results, 42px on home, and 22/40px
+page gutters that drop to 16px below 560px.
 
-> **On the green URL line.** A colored URL beneath the title is a general SERP convention, not a
-> Google invention, so it stays. What we avoid is their specific value: `#006621` is a warm,
-> saturated emerald. `--url` is a desaturated pine with a cool cast — recognizably the same idea,
-> plainly not the same color. It clears WCAG AA against `--bg` at roughly 6.3:1.
+Every color the page paints is one of these tokens. Two literals remain, both deliberate: `#000`
+for the submit button's hover face, which is one step darker than `--ink` and exists only as a
+hover response, and the `--ink` value written inline in the static favicon `<link>`, because a
+`data:` URI cannot reference a custom property — the script redraws that favicon from the token at
+startup.
 
-Every color the page paints is one of these tokens; no surface, border or text color is written as
-a literal outside the `:root` block. The one exception is the static favicon `<link>` in `<head>`,
-which carries `--ink`'s value inline because a `data:` URI cannot reference a custom property; the
-script redraws that favicon from the token at startup.
+> **On the grey.** The reference mockups use three greys, down to `#a8a8a8` for the timing. This
+> implementation collapses them to one, `--ink-muted` at 4.6:1 on white, because the URL line, the
+> timing and the placeholders are all *text*, and the project's accessibility rule is that text
+> meets WCAG AA. The hierarchy the extra greys carried is recovered through size, tracking and
+> uppercasing instead. `--rule` is a border color and is never used for text.
 
 ## Page inventory
 
@@ -60,8 +69,8 @@ script redraws that favicon from the token at startup.
 |---|---|---|
 | Home | *(no fragment)* | Enter a search |
 | Results | `#q=<query>` | See results for a query |
-| About | `#about` | What Froogle is, how it works, privacy |
-| Settings | `#settings` | Manage a personal API key |
+| About | `#about` | What Froogle is, privacy, self-hosting |
+| Settings | `#settings` | Choose a mode; manage a Keenable key |
 
 Views are `<section>` elements in the one document, shown and hidden by the router. There is no
 client-side templating; each view's markup exists in the HTML and only the result list is built
@@ -69,132 +78,146 @@ dynamically.
 
 ## Layout
 
-Single column throughout, max width 640px, centered, 16px side padding. The same column applies at
-every breakpoint — a search engine has no use for a second column, so there is no responsive
-reflow to get wrong. Below 480px the results header stacks the wordmark above the search box.
+### Masthead
+
+A `<header>` above `<main>`, shown on every view **but** home, holding the wordmark, the search
+field, the submit button, and beneath them the utility row. It is centered on `--measure` with a
+`--rule` hairline under it. Because it lives outside the view sections, Results, About and
+Settings all carry the same search box and the same links with no duplication.
+
+Below 560px the row wraps and the wordmark takes a full line of its own, so the field and its
+button keep a usable width at 320px.
 
 ### Home
 
 ```
-                    (vertical space, ~22vh)
+                    (centered in the viewport)
 
-                       F r o o g l e            <- 44px serif wordmark
+                         Froogle              <- 56px, weight 500, -0.035em
+                   Fast ad-free search        <- 14px, --ink-muted
 
-              [ search box, 480px max      ] [ Search ]
+              [ Search                 ] [ Search ]   <- underlined field, dark button
 
-                    (vertical space)
-
-                About · Settings · <mode line>  <- 11px, --ink-soft
+               About  Settings  Mode: Proxied         <- 12px utility row
 ```
 
-Input receives focus on load. Submit via the button or Enter.
+The whole view is a flex column centered on `min-height: 100svh`. The input takes focus on load.
 
 ### Results
 
 ```
-Froogle   [ typescript best practices    ] [ Search ]     <- 22px wordmark, links home
-──────────────────────────────────────────────────────    <- 1px --ink-faint rule
+Froogle  [ moog model d repair          ]  [ Search ]
+About  Settings  Mode: Proxied  0.19 SECONDS
+──────────────────────────────────────────────────────  <- 1px --rule
 
-Understanding TypeScript's structural typing              <- 15px, --link, underlined
-example.com/blog/structural-typing                        <- 13px, --url, plain text
-Jan 8, 2026 — Structural typing means a type is           <- 13px, --ink, 2 lines max
-compatible with another if its members are compatible…
+Servicing a Moog Model D: complete teardown guide       <- 19px --link
+synthrepairguild.org/guides/moog-model-d                <- 12px --ink-muted
+Jan 8, 2026 — Step-by-step photos covering key…         <- 14px --body, 2 lines max
 
-(24px gap, next result)
-
-                About · Settings · <mode line>
+(30px gap, next result)
 ```
-
-The search box stays populated with the current query so it can be edited in place.
 
 ### About
 
-Prose in the same column: what Froogle is, how it works, privacy. Headings at 15px bold, body at
-15px, generous paragraph spacing. Ends with links to the source repo and to Keenable.
-
-The "how it works" list describes shared mode only where shared mode can actually happen — see
-**Deployment-conditional prose** below.
+The prose the project ships: what Froogle is, four bullets, the privacy section with the two modes
+described in full, and self-hosting. The two mode bullets are the canonical explanation, and
+Settings echoes them rather than inventing a second wording.
 
 ### Settings
 
-Explains the modes this deployment has, then a single labelled `<input type="password">` for a
-Keenable key, with Save and Clear buttons and a link to Keenable's console. Below it, the current
-state in one line, which is derived from the same mode calculation as the footer indicator so the
-two can never disagree:
-
-| Condition | Line |
-|---|---|
-| Direct, key from `API_KEY` | "This copy of Froogle has a key built in, which takes precedence over anything saved here." |
-| Direct, key from `localStorage` | "Using a key stored in this browser." |
-| Shared | "No key set — searches will try Froogle's shared allowance." |
-| No key and no proxy | "No key set, and this copy of Froogle has no shared allowance to fall back on, so searching needs a key." |
-
-Saving runs a real search to validate before storing, so a mistyped key is rejected at the moment
-of entry rather than at the next search. Both buttons are disabled while that check runs.
-
-### Deployment-conditional prose
-
-Two sentences in About and one paragraph in Settings describe a shared allowance, and a `file://`
-copy has none and never will — `selectMode` short-circuits on the protocol, so this is a permanent
-property of that deployment rather than something a later phase fixes.
-
-There are **three** wordings, not two, because the page has three honest answers and only two of
-them are certain:
-
-| State | When | The prose says |
-|---|---|---|
-| `data-when-solo` | `file://`, no `PROXY_PATH`, or a probe proved nothing is there | There is no shared mode here; a key is required |
-| `data-when-shared` | A shared-mode request has come back readable | There are two ways your search can reach Keenable |
-| `data-when-unknown` | Everything else — an http(s) origin with a `PROXY_PATH` nothing has tried yet | There may be two ways, depending on how this copy is hosted; try a search, and if there is no proxy the search itself will say so and ask for a key |
-
-The third state is not a nicety. `PROXY_PATH` is relative and carries no host by design, so the
-page cannot tell a deployment with a Function behind it from a lone `index.html` on a static host
-until something has answered there — and only a keyless search ever asks. On a static host whose
-operator baked in an `API_KEY`, nobody is ever keyless, nothing ever asks, and a two-state guess
-would assert a shared allowance that does not exist for the life of the deployment. Asserting
-neither until one is established is the same discipline the rest of the app follows.
-
-All three wordings are authored in the HTML, marked `data-when-shared`, `data-when-solo` and
-`data-when-unknown`, and the renderer shows one: the prose is toggled, not rewritten, so all three
-stay readable in the source and keep their markup.
-
-The question asked is "would a keyless visitor here get shared mode", with the key forced absent —
-a deployment property, not a per-visitor one, so saving a key does not rewrite the page's
-explanation of itself. Note the asymmetry with the footer mode indicator and the Settings key-state
-line, which read `shared` on an unprobed deployment: those describe what the *next search will
-attempt*, which is true and self-correcting within one request, while this prose describes the
-deployment itself, which is a durable claim.
+Two radios for the mode, each with the About bullet beneath it, then one line saying what searches
+will actually do, then the key form. See **Mode** below.
 
 ## Components
 
 | Component | Notes |
 |---|---|
-| Wordmark | Text only, single color, slight letter-spacing. Two sizes. Never multi-colored |
-| Search form | Real `<form>`, labelled `<input type="search">`, submit button. Identical markup in both placements, different sizing |
-| Result item | `<li>` containing title link, URL line, snippet. See below |
-| Footer | About · Settings · mode indicator. Present on every view |
-| Notice | One block used for errors, the empty state, and the no-key state. `role="status"` |
+| Wordmark | Text only, single color, weight 500, negative tracking. Two sizes. Never multi-colored |
+| Search form | Real `<form>`, labelled `<input type="search">`, submit button. One in the masthead, one on home |
+| Utility row | About · Settings · mode line, plus the timing on results. One per search form |
+| Result item | `<li>` containing title link, URL line, snippet |
+| Notice | One block used for errors, the empty state, and the two no-search states. `role="status"` |
+| Mode radios | Settings only |
 | Key form | Settings only |
+
+### Fields and buttons
+
+A field is a bottom rule only: no box, no radius, no background. The UA focus outline is
+suppressed on fields and replaced, not removed — the rule takes `--link` and doubles in weight via
+a `box-shadow`, which is visible on white and does not depend on the outline. Every other control
+keeps the standard 2px `--link` `:focus-visible` outline.
+
+The submit button is solid `--ink` with `--on-ink` text and square corners. Clear is its outline
+counterpart. Both go `--ink-muted` when disabled.
 
 ### Result item
 
-* Title is an `<a>`. When `title` is empty, the URL's hostname is used instead.
-* URL line is plain text in `--url`, not a link, so there is one click target per result.
+* Title is an `<a>` at 19px. When `title` is empty, the URL's hostname is used instead.
+* URL line is plain text in `--ink-muted`, not a link, so there is one click target per result.
 * Snippet is `snippet || description || ""`, whitespace collapsed, clamped to two lines with
   `-webkit-line-clamp` and a `max-height` fallback.
-* A `published_at` date, when present, prefixes the snippet as `Jan 8, 2026 — ` in `--ink-soft`.
+* A `published_at` date, when present, prefixes the snippet as `Jan 8, 2026 — ` in `--ink-muted`.
 * Only `http:` and `https:` URLs become links; anything else renders as plain text.
 
-## Mode indicator
+## Mode
 
-One line in the footer, `--ink-soft`, 11px:
+The mode is **chosen**, not derived. The visitor's preference lives at `froogle.mode` in
+`localStorage` (`"proxied"` | `"direct"`, default `"proxied"`), independent of `froogle.key`, so
+switching modes never destroys a saved key. `selectMode` then constrains that preference by what
+this copy of the page can actually do; the preference itself is never rewritten.
 
-* Direct — "Direct: your searches go straight to Keenable."
-* Shared — "Queries proxied through Froogle. Zero logs."
-* No key, no proxy — "No API key set." linking to Settings.
+### The mode line
 
-It is the honest, always-visible version of the privacy claim, rather than something buried in
-About. It updates whenever a key is saved or cleared, without a reload.
+One line in each utility row, 12px `--ink-muted`, always a link to Settings, so the line that
+reports the mode is also the way to change it. It names the mode a search started *right now*
+would use:
+
+| Effective mode | Line |
+|---|---|
+| `proxied` | Mode: Proxied |
+| `direct` | Mode: Direct |
+| `nokey` | Mode: no key |
+
+`nokey` gets its own wording rather than reading "Direct", because a page with no key cannot
+search and saying "Direct" would claim it can. Home and the masthead each carry one of these
+lines; they are rendered by one function from one state, so they cannot disagree.
+
+### The Settings radios
+
+Both choices are always shown with their About wording. Below them, one line — the only place that
+can say the chosen mode is not the one running:
+
+| Chosen | Running | Line |
+|---|---|---|
+| Proxied | Proxied | Searches go through Froogle's proxy. |
+| Direct | Direct | Searches go straight from this browser to Keenable. |
+| Proxied | Direct | Proxied is not available here, so searches go straight to Keenable with your saved key. |
+| Proxied | *(no key)* | Proxied is not available here, so searching needs a Keenable API key. |
+| Direct | *(no key)* | Direct mode needs a Keenable API key before it can search. |
+
+Where Proxied cannot be honoured, a note in `--alert` sits under it:
+
+| Proxy status | When | Note | Radio |
+|---|---|---|---|
+| `blocked` | `file://`, or `PROXY_PATH` empty | "Not available here: this copy of Froogle has no server behind it to proxy through, so searches use Direct instead." | Disabled |
+| `missing` | A request proved nothing answers at `PROXY_PATH` | "This copy of Froogle has no proxy — switch to Direct and add a key." | **Enabled** |
+
+The asymmetry is deliberate. `blocked` is structural and permanent for that deployment, so the
+choice is disabled rather than offered and left to fail. `missing` was *learned* this session and
+may be wrong tomorrow — the same file redeployed behind a Function has a proxy — so the radio stays
+usable and the stored preference is left intact, to be honoured the moment one answers.
+
+The key form sits below, under its own heading, and its state line reports only what key this
+browser holds. It says nothing about the mode: the line under the radios owns that, and two lines
+describing the same thing are two lines that can drift apart.
+
+### Timing
+
+The utility row on Results carries the measured round trip of the request, `0.19 SECONDS`, in 11px
+uppercase with `0.08em` tracking. It is `performance.now()` either side of the fetch, to two
+decimals — real or absent, never a placeholder, because it is a checkable claim about this
+deployment's speed. It is omitted whenever there is nothing to report: before a search, on an
+error, and on every view but Results.
 
 ## States
 
@@ -202,22 +225,25 @@ About. It updates whenever a key is saved or cleared, without a reload.
 |---|---|
 | Idle | Home or Results as above |
 | Searching | "Searching…" in the notice slot, replacing the previous list. Submit disabled |
-| Results | The list |
+| Results | The list, and the timing in the utility row |
 | Empty | "No results found for *query*." Notice styling, not error styling |
 | Error | Plain-language message per the functional spec, search box still populated |
-| No key available | Notice explaining Froogle needs a key here, linking to Settings |
+| Direct chosen, no key | "Direct mode needs a Keenable API key to search. Keys are free." + Settings link |
+| Proxied chosen, no proxy | "This copy of Froogle has no proxy of its own." Then "Switch to Direct mode and add a free Keenable API key" with a Settings link, or "Search again and it will go straight to Keenable with your key" when a key is already saved |
 
 ## Accessibility
 
-* Every control reachable and operable by keyboard, with a visible 2px `--focus` outline.
-* The search input has a real `<label>`, visually hidden on the home view where the wordmark
-  already supplies context.
+* Every control reachable and operable by keyboard, with a visible focus indicator: a 2px `--link`
+  outline on buttons, links and radios, and the doubled `--link` rule on text fields.
+* Both search inputs have a real `<label>`, visually hidden — the wordmark beside them supplies the
+  visible context. The Results view carries a visually hidden `<h1>`.
+* The mode radios are a `<fieldset>` with a visually hidden `<legend>`, and are operable with the
+  arrow keys like any radio group.
 * Results are a `<ul>`, so screen readers announce the count.
-* The notice region is `role="status" aria-live="polite"`, so state changes are announced.
+* The notice, the mode state line and the key state line are all `role="status" aria-live="polite"`.
 * `document.title` updates to `query — Froogle` on the results view.
-* Body text meets WCAG AA contrast against `--bg`; `--ink-faint` is used only for rules and
-  borders, never for text — placeholder text included, which is why every `::placeholder` takes
-  `--ink-soft` (6.6:1) rather than `--ink-faint` (3.6:1) or the UA default (~3.2:1).
+* All text meets WCAG AA against `--bg`: `--body` at 10.9:1, `--ink-muted` at 4.6:1, `--link` at
+  8.5:1, `--alert` at 6.5:1. `--rule` is a border color and never carries text.
 * No color is the sole carrier of meaning.
 
 ## Non-goals
