@@ -6,16 +6,20 @@ status: draft
 
 A free search engine over the [Keenable](https://keenable.ai) web search API.
 
-CORS on `api.keenable.ai` is open (verified by the project owner), so the browser can call the
-keyless public endpoint directly. That removes the backend entirely: every visitor spends their
-**own** IP's keyless quota, so the engine costs nothing to run and has no shared rate limit to
-protect.
+Hybrid, because of a measured constraint in Keenable's CORS config: the **keyless** endpoint
+requires an `X-Keenable-Title` header that their own preflight forbids, so no browser can call it;
+the **keyed** endpoint has no such requirement and is browser-callable.
+
+* **Direct mode** — with a key (baked in by a self-hoster, or saved by a visitor into
+  `localStorage`), the browser calls Keenable itself. Nothing touches a Froogle server. On the
+  hosted instance, a visitor who sets a key never calls the proxy again.
+* **Shared mode** — with no key, the browser calls Froogle's own thin proxy, which tries the
+  keyless endpoint first and falls back to the operator's key.
 
 ## The repo
 
-Two files. That's it.
-
-* `index.html` — the entire search engine. Markup, CSS, and JS in one file.
+* `index.html` — the entire frontend. Markup, CSS, and JS in one file.
+* `functions/api/search.js` — the optional proxy (Cloudflare Pages Function, same-origin).
 * `README.md`
 
 ## Self hosting
@@ -29,8 +33,10 @@ JS variables at the top of `index.html`:
 
 * `SEARCH_ENGINE_NAME` — default `"Froogle"`
 * `API_KEY` — default none
-* `UNAUTHENTICATED_FIRST` — bool, default `false`. When an API key is present and this is set, try
-  the keyless endpoint first and fall back to the key on rate limits.
+* `PROXY_URL` — default empty, so a self-hosted copy never points at someone else's proxy
+
+Proxy environment: `KEENABLE_API_KEY`, `UNAUTHENTICATED_FIRST` (default true),
+`RATE_LIMIT_PER_MINUTE` (default 10).
 
 ## Design
 
@@ -44,8 +50,10 @@ Part of the same single-page app, at `#about`. Covers roughly what the README co
 the web:
 
 * A free single-page search engine.
-* How it works: calls Keenable directly from your machine. Your queries never pass through Froogle.
-* Privacy: Froogle tracks nothing.
+* How it works: results come from Keenable. In direct mode your browser calls them itself and your
+  query never reaches a Froogle server; in shared mode it passes through Froogle's proxy, which
+  logs and stores nothing.
+* Privacy: no cookies, no analytics, no third-party code. A saved key stays in your browser.
 
 ## Routing and privacy
 
