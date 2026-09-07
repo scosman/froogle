@@ -7,7 +7,7 @@
  *
  * It exists for one measured reason. Keenable's keyless endpoint requires an X-Keenable-Title
  * header, and Keenable's own CORS preflight does not allow that header, so no browser can call it.
- * A server can. This is the whole of shared mode: a visitor with no API key POSTs here, and this
+ * A server can. This is the whole of proxied mode: a visitor with no API key POSTs here, and this
  * calls the keyless endpoint on their behalf, falling back to the operator's key when the keyless
  * tier refuses.
  *
@@ -82,7 +82,7 @@ export async function handleSearch(request, env) {
 
   /* Keenable's status and body, unchanged — except a 2xx whose body will not parse, which `search`
      has already turned into a 502. Every other status and body reaches the client exactly as
-     Keenable sent it, so the client's error mapping is identical in direct and shared mode. */
+     Keenable sent it, so the client's error mapping is identical in direct and proxied mode. */
   return new Response(outcome.body, { status: outcome.status, headers: JSON_HEADERS });
 }
 
@@ -183,7 +183,7 @@ async function search(body, auth) {
   /* A 2xx whose body will not parse becomes a 502 instead of being passed through. The client
      treats "a 200 from PROXY_PATH carrying something that is not JSON" as proof that no proxy is
      there — it is what a static host does when it serves a page for every path — and retires
-     shared mode for the session on it. Were this proxy ever to forward an empty or malformed 200
+     proxied mode for the session on it. Were this proxy ever to forward an empty or malformed 200
      from Keenable, a working deployment would frame itself as a missing one, durably and wrongly.
      Emitting only parseable JSON on success is what makes that inference sound.
 

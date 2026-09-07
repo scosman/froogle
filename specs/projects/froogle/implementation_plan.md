@@ -34,6 +34,18 @@ and `src/serve.mjs`, and the tests are `src/*.test.mjs`. See `architecture.md` f
       Cloudflare Rate Limiting rule, or the equivalent elsewhere) as the required step before
       exposing a public instance with a key, and the manual test checklist.
 
+## After the three phases
+
+- [x] **Redesign, chosen mode, new About, MIT licence.** A new visual system (white ground, `#111`
+      ink, Helvetica-first, a 660px measure, a masthead in place of the footer), the mode turned
+      from something derived into a stored choice with radios in Settings, the About copy rewritten,
+      a measured search-timing line, and `LICENSE`. `ui_design.md`, `functional_spec.md`,
+      `architecture.md` and `project_overview.md` were rewritten with it.
+
+      **Shared mode was renamed "proxied" in this pass.** The three phase entries above and the
+      plans in `phase_plans/` are a record of what was built at the time and keep the older name
+      throughout; nothing in either was edited after the fact.
+
 ## Later
 
 Not part of v1, ordered by expected value:

@@ -15,6 +15,8 @@ src/*.test.mjs             unit tests, dev-only, no dependencies
 wrangler.jsonc             Cloudflare deployment config
 ```
 
+MIT licensed — see [LICENSE](LICENSE).
+
 ---
 
 ## The two modes
@@ -26,16 +28,28 @@ Froogle is a hybrid, because of a measured constraint in Keenable's CORS configu
 * Keenable's **keyed** endpoint needs no such header, and `X-API-Key` *is* allowed. A browser
   holding a key can search Keenable directly.
 
-So which request Froogle makes depends only on whether a key is available:
+So there are two request paths, and **the visitor chooses** which one their searches take, in
+Settings:
 
-| Mode | When | What happens |
+| Mode | What happens | Setup |
 |---|---|---|
-| **Direct** | A key is available — `API_KEY` in the file, or one the visitor saved in Settings | The browser calls `https://api.keenable.ai/v1/search` itself. Nothing touches a Froogle server. |
-| **Shared** | No key, and a proxy answers at `PROXY_PATH` | The browser calls Froogle's own same-origin proxy, which calls the keyless endpoint for it and falls back to the operator's key. |
-| **No key** | No key and no proxy — including anything opened over `file://` | Froogle explains that it needs a key, and links to Settings. |
+| **Proxied** (default) | The browser calls Froogle's own same-origin proxy, which calls Keenable's keyless endpoint for it and falls back to the operator's key. Froogle logs nothing and passes on no identifier and no visitor IP, so a query is mixed in with every other visitor's. May hit rate limits. | None |
+| **Direct** | The browser calls `https://api.keenable.ai/v1/search` itself with the visitor's own key. Nothing touches a Froogle server, so Froogle never sees the query — and Keenable can identify the visitor by that key. | A free Keenable account and key |
 
-The mode is decided per search, so saving or clearing a key takes effect immediately with no
-reload. It is always shown in the footer.
+The choice lives in `localStorage` at `froogle.mode`, **separately from the key** at
+`froogle.key`, so switching to Proxied and back never throws a saved key away. It defaults to
+Proxied.
+
+The mode is applied per search, so switching modes or saving a key takes effect immediately with
+no reload, and the mode in use is shown on every view next to the About and Settings links.
+
+Where a choice cannot be honoured, Froogle says so rather than quietly doing something else:
+
+| Chosen | Situation | What Froogle does |
+|---|---|---|
+| Direct | No key saved | The search stops and asks for a key. The setting stays on Direct. |
+| Proxied | `file://`, or `PROXY_PATH` set to `""` | There is no server to proxy through, so Proxied is shown disabled with the reason, and searches use Direct. |
+| Proxied | Nothing answers at `PROXY_PATH` — a lone `index.html` on a static host | The search says this copy has no proxy, and points at Direct plus a key. **The setting is kept**, so redeploying the same file behind a Function honours it again with nothing to re-choose. |
 
 ---
 
@@ -45,7 +59,7 @@ reload. It is always shown in the footer.
 |---|---|---|
 | Downloads folder, `file://` | `index.html` | Direct |
 | Any static host — GitHub Pages, S3, Netlify, nginx | `index.html` | Direct |
-| Cloudflare Workers | `index.html` + `src/` + `wrangler.jsonc` | Direct and shared |
+| Cloudflare Workers | `index.html` + `src/` + `wrangler.jsonc` | Direct and proxied |
 
 ### Downloads folder
 
@@ -63,7 +77,7 @@ against *that* host, so a self-hosted copy structurally cannot reach the origina
 keyless search of the session costs one wasted request and then Froogle remembers, for the rest of
 that browser session, to go straight to the key prompt instead.
 
-### Cloudflare Workers, with shared mode
+### Cloudflare Workers, with proxied mode
 
 In the Cloudflare dashboard, **Workers & Pages → Create application → import your repository**.
 There is no build command to set: `wrangler.jsonc` already names the entry point and the assets
@@ -83,8 +97,8 @@ its own.
 > product being deployed to. `src/worker.mjs` is what replaces that routing.
 
 `.assetsignore` lists what the asset upload must leave out — `src/`, `specs/`, this README, the
-config, and the local-only `.git/` and `.wrangler/` directories — so the deployed site is
-`index.html` and nothing else. Workers, unlike Pages, excludes nothing by default, and the file is
+LICENSE, the config, and the local-only `.git/` and `.wrangler/` directories — so the deployed
+site is `index.html` and nothing else. Drop a line to publish one of them at the site URL. Workers, unlike Pages, excludes nothing by default, and the file is
 the only thing standing between your working tree and the public site: if you fork this and keep
 private notes in the tree, add them there. `src/serve.mjs` reads the same file, so a path that 404s
 on the deployment 404s in local development too.
@@ -103,9 +117,9 @@ this publicly, read [Running a public instance](#running-a-public-instance) firs
 
 | Name | Default | Meaning |
 |---|---|---|
-| `SEARCH_ENGINE_NAME` | `"Froogle"` | The engine's name everywhere it appears: the wordmark, the page title, the favicon letter, the About and Settings prose, the footer mode line, and the error messages that name it. Blank or whitespace-only falls back to `"Froogle"`. |
+| `SEARCH_ENGINE_NAME` | `"Froogle"` | The engine's name everywhere it appears: the wordmark, the page title, the favicon letter, the About and Settings prose, the Settings state lines, and the error messages that name it. Blank or whitespace-only falls back to `"Froogle"`. |
 | `API_KEY` | `""` | A Keenable key baked into the file. **See the warning below.** |
-| `PROXY_PATH` | `"/api/search"` | Same-origin path to the proxy. Relative by design. Set it to `""` to disable shared mode entirely. |
+| `PROXY_PATH` | `"/api/search"` | Same-origin path to the proxy. Relative by design. Set it to `""` to disable proxied mode entirely. |
 
 Two of these are stated twice, because a browser page and a server module cannot share a constant:
 
@@ -175,8 +189,8 @@ hostname is not in one of your zones — a rule written there will never fire. A
 to the Worker first, or treat `KEENABLE_API_KEY` as unset until you have. Any
 other host has an equivalent. Pick limits that suit your budget. The rule matches at the edge,
 *before* the Worker runs, so an over-limit request never reaches the proxy at all — the
-browser gets the platform's 429 directly, and Froogle shows its "shared allowance is busy" message
-with a link to add a personal key.
+browser gets the platform's 429 directly, and Froogle shows its "the proxy is busy" message
+with a link to Settings to switch to Direct with a personal key.
 
 Two other things worth doing on a public instance:
 
@@ -195,7 +209,7 @@ Two other things worth doing on a public instance:
   CDN log, and no `Referer` header. Legacy `?q=` links are accepted and immediately rewritten to
   the `#` form, leaving no extra history entry.
 * **No cookies, no analytics, no third-party code**, in any mode.
-* **The proxy logs nothing and stores nothing.** In shared mode Keenable sees the proxy's egress
+* **The proxy logs nothing and stores nothing.** In proxied mode Keenable sees the proxy's egress
   IP, not the visitor's.
 * **In direct mode nothing touches a Froogle server at all.** Keenable sees the query and the
   visitor's IP address.
@@ -243,34 +257,30 @@ from Node 18 to Node 20.19 / 22.7.
 The DOM and `fetch` layers are covered here rather than by unit tests. Work through this before
 shipping a change to the browser layer.
 
-**Deployment and mode**
+**Mode**
 
-The About and Settings prose has three states, and each renders only where it is true. Walk them
-in this order on a deployed build, or against `node src/serve.mjs`:
-
-- [ ] **On first load, before any search**, the prose shows the *unknown* wording — "up to two ways
-      your search can reach them, depending on how this copy of the page is hosted". The page has
-      not yet established that a proxy is there, and must not claim one.
-- [ ] **After one successful keyless search**, it shows the *shared* wording — "two ways your
-      search can reach them", the **Shared** bullet, and the Settings paragraph about a shared
-      allowance. That search itself returns results through the proxy, and the footer reads
-      "Queries proxied through Froogle. Zero logs."
-- [ ] **On `file://`**, it shows the *solo* wording — no shared mode, no shared allowance — from
-      the very first render, with no search needed.
-- [ ] Saving a key *after* that successful keyless search flips the footer, the Settings key-state
-      line and the next search to direct with no reload — and the prose keeps its **shared**
-      wording, because the deployment still has a shared allowance whatever this visitor does.
-- [ ] `index.html` alone on a static host with no Function: the first keyless search costs one
-      request and lands on the key prompt; every later search in that session goes straight to the
-      key prompt with no network request at all; a new tab tries once more.
-- [ ] Over `file://`, a keyless search goes straight to the key prompt with no request attempted
-      and nothing in the console.
+- [ ] On a deployed Worker, or against `node src/serve.mjs`, a first-time visitor searches with no
+      setup, the mode line reads "Mode: Proxied", and the request goes to `/api/search`.
+- [ ] Switching to Direct with no key saved: the next search stops and asks for a key, the radio
+      **stays** on Direct, and the mode line reads "Mode: no key".
+- [ ] Saving a key then flips the mode line and the next search to direct with no reload.
+- [ ] Switching back to Proxied and then to Direct again does **not** lose the saved key.
+- [ ] `index.html` alone on a static host with no Worker: the first search costs one request and
+      lands on "this copy has no proxy"; every later search in that session makes no request to
+      `/api/search` at all; the Proxied radio stays **enabled** and stays chosen, with its reason
+      shown; a new tab tries once more.
+- [ ] The same, but with a key already saved: the first search says the next one will go direct,
+      and it does.
+- [ ] Over `file://`, Proxied is shown **disabled** with its reason from the very first render, no
+      request is attempted, and nothing appears in the console.
 - [ ] On a working hosted build, going offline (DevTools → Network → Offline) and searching gives
       "Search is unavailable right now" — and then, back online, the very next search works. A
-      dropped connection must **not** retire shared mode for the session or flip the prose.
-- [ ] The Settings key-state line, the footer indicator and an attempted search all agree about the
-      mode, in every combination of key present/absent and `file://`/hosted.
+      dropped connection must **not** retire proxied mode for the session.
+- [ ] The Settings mode line, the utility-row mode line and an attempted search all agree, in every
+      combination of chosen mode, key present/absent, and `file://`/hosted.
 - [ ] Loads and searches from `file://` with a stored key.
+- [ ] The timing in the utility row shows a real elapsed time on results, and is absent before a
+      search, on an error, and on About and Settings.
 
 **Routing**
 
@@ -280,7 +290,9 @@ in this order on a deployed build, or against `node src/serve.mjs`:
 
 **Accessibility and layout**
 
-- [ ] Keyboard-only operation throughout, with a visible focus ring on every control.
+- [ ] Keyboard-only operation throughout, with a visible focus indicator on every control — the
+      mode radios (arrow keys) and the text fields, whose focus is the rule turning blue and
+      thickening rather than an outline, included.
 - [ ] Keyboard focus survives a search started from either Search button — including the two
       failures that return early without a request.
 - [ ] Tapping Search on a touch device does **not** re-open the on-screen keyboard over the
@@ -293,7 +305,8 @@ in this order on a deployed build, or against `node src/serve.mjs`:
 **Robustness**
 
 - [ ] With storage disabled (Safari private mode, or "block all cookies"), the app degrades to the
-      no-key state rather than breaking.
+      no-key state rather than breaking, and choosing a mode says plainly that the choice will be
+      forgotten when the tab closes while still applying it for that tab.
 - [ ] With JavaScript disabled, the page explains that Froogle needs it.
 
 ---

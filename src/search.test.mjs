@@ -422,7 +422,7 @@ test("a successful body comes back byte for byte, whitespace included", async ()
 
 test("a 2xx that will not parse becomes a 502 rather than being passed through", async () => {
   // The client reads "200 from PROXY_PATH carrying something that is not JSON" as proof no proxy
-  // is there and retires shared mode for the session. Forwarding a malformed 200 from Keenable
+  // is there and retires proxied mode for the session. Forwarding a malformed 200 from Keenable
   // would make a working deployment frame itself as a missing one, durably and wrongly. So the
   // pass-through guarantee is byte-for-byte for *parseable* success bodies, and this is the edge.
   for (const body of ["", "   ", "<!doctype html><p>hi", "{\"results\":", "undefined"]) {

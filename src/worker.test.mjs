@@ -60,7 +60,7 @@ test("a non-POST on the proxy path is a 405, the status index.html reads as 'no 
    of the entry module as a handler and refuses a string one at startup.
 
    Drift between them is silent and looks like something else entirely. The page reads the 404 that
-   a mismatch produces as proof the deployment has no proxy, retires shared mode for the session,
+   a mismatch produces as proof the deployment has no proxy, retires proxied mode for the session,
    and shows the "bring your own key" prompt — which is exactly what a correct deployment with no
    proxy looks like. So the agreement is asserted here instead. */
 test("the adapter answers on exactly the path index.html posts to", async () => {
@@ -68,7 +68,7 @@ test("the adapter answers on exactly the path index.html posts to", async () => 
   const match = /\nconst PROXY_PATH = "([^"]*)";/.exec(html);
   assert.ok(match, "index.html must declare a PROXY_PATH constant");
 
-  /* An empty PROXY_PATH is the documented way to turn shared mode off, and then there is no path
+  /* An empty PROXY_PATH is the documented way to turn proxied mode off, and then there is no path
      for the two to agree on. */
   if (match[1] === "") return;
 
