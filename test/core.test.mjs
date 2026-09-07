@@ -24,7 +24,7 @@ const EXPORTED = [
   "MAX_RESULTS", "SNIPPET_MAX_LENGTH",
   "parseQuery", "buildRequestBody", "searchRequest",
   "parseRoute", "formatRoute", "legacyTarget", "legacyRedirect",
-  "resolveKey", "selectMode",
+  "resolveKey", "selectMode", "proxyUnavailable",
   "resultsFrom", "resultTitle", "pickSnippet", "normalizeSnippet", "isLinkableUrl", "displayUrl",
   "formatDate",
   "escapeXml", "errorMessage", "keyCheckResult", "modeIndicator",
@@ -388,6 +388,24 @@ test("selectMode returns nokey when no proxy path is configured", () => {
     core.selectMode({ key: "", protocol: "https:", proxyKnownBad: false, proxyPath: "" }),
     "nokey",
   );
+});
+
+test("proxyUnavailable is true only for a proxy that is not there", () => {
+  // 404 and 405 are a static host answering for a path with no function behind it; 0 is the
+  // client's marker for a network failure or a body that would not parse — an SPA fallback
+  // serving index.html for the proxy path answers 200 with HTML, which reaches us as 0.
+  for (const status of [404, 405, 0]) {
+    assert.equal(core.proxyUnavailable(status), true, "expected true for " + status);
+  }
+});
+
+test("proxyUnavailable leaves a proxy that answered badly alone", () => {
+  // A 5xx means something is there and is broken: retryable, not missing. Marking it missing would
+  // strand the whole session on the key prompt over one bad minute.
+  for (const status of [200, 400, 401, 402, 403, 429, 500, 502, 503, "timeout", "nokey",
+                        undefined, null]) {
+    assert.equal(core.proxyUnavailable(status), false, "expected false for " + String(status));
+  }
 });
 
 test("resolveKey prefers the configured key over the stored one", () => {

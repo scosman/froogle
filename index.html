@@ -551,6 +551,19 @@ function selectMode({ key, protocol, proxyKnownBad, proxyPath } = {}) {
   return "shared";
 }
 
+/* Whether a shared-mode failure says the proxy is not there at all, as opposed to a search that
+   failed. 404 and 405 are a static host answering for a path with no function behind it, and 0 is
+   the client's marker for "no readable HTTP response", which covers both a network failure and a
+   body that will not parse as JSON — a single-page-app fallback serving index.html for the proxy
+   path answers 200 with HTML.
+
+   A 5xx is deliberately absent: something is there and it is broken, which is a retryable search
+   failure rather than a missing proxy, and marking it missing would strand the session on the key
+   prompt over one bad minute. So is "timeout", for the same reason. */
+function proxyUnavailable(status) {
+  return status === 404 || status === 405 || status === 0;
+}
+
 /* URL.host is punycode for an internationalized domain, so an IDN result shows as
    "xn--r8jz45g.com" in both the title fallback and the URL line. Left as-is deliberately: the
    punycode form is what the browser will actually navigate to, and decoding it would let a
@@ -791,26 +804,21 @@ const proxyKnownBad = () => readStore(sessionStorage, PROXY_UNAVAILABLE_KEY) ===
 
 const currentKey = () => resolveKey(API_KEY, storedKey());
 
-/* The key is a parameter so a caller that has already resolved it — the search path, which needs
+/* The single source of truth for which of the three modes this page is in. The footer indicator,
+   the Settings key-state line, the About and Settings deployment prose and the search path all
+   derive from it, so they cannot disagree.
+
+   The key is a parameter so a caller that has already resolved it — the search path, which needs
    the key itself for the header — cannot end up deciding the mode from a different answer than
-   the one it sends. */
+   the one it sends. Nothing here is cached: saving a key, clearing one, or discovering that the
+   proxy is not there takes effect on the very next render. */
 function currentMode(key = currentKey()) {
-  const mode = selectMode({
+  return selectMode({
     key,
     protocol: location.protocol,
     proxyKnownBad: proxyKnownBad(),
     proxyPath: PROXY_PATH,
   });
-  /* Phase 2 ships direct mode only: there is no proxy client yet, so a keyless visitor genuinely
-     has no way to search and the whole page should say so.
-
-     Phase 3 adds the proxy request and retires the bridge by REPLACING the return below with
-     `return mode;` — not by deleting the line, which would return undefined and leave every
-     surface that reads this quietly wrong: the mode indicator and the key-state line both fall
-     through to their no-key wording, sharedAllowanceExists() stays false, and runSearch's
-     `mode === "nokey"` guard stops matching, so a keyless search reaches searchRequest and throws.
-     Nothing catches any of that, and the page looks plausible while all five surfaces lie. */
-  return mode === "shared" ? "nokey" : mode;
 }
 
 /* ---- rendering ---- */
@@ -954,9 +962,9 @@ function renderDeploymentProse() {
 
 /* Derived from currentMode() rather than from storage directly, so this line cannot promise a
    shared allowance while the footer just below it — and the search path — say there is no way to
-   search at all. It reports whatever the mode actually is, which keeps it correct on
-   file://, where there has never been a proxy, and again in Phase 3, when the bridge inside
-   currentMode() is retired — see the note there — and "shared" starts being reachable. */
+   search at all. It reports whatever the mode actually is, on file:// where there has never been a
+   proxy, on a static host where the first search has just discovered there is none, and on a
+   deployment where the proxy answers. */
 function keyStateText() {
   const mode = currentMode();
   if (mode === "direct") {
@@ -1131,6 +1139,22 @@ async function runSearch() {
      is to a question nobody is asking any more. */
   if (seq !== state.seq) return;
   inFlight = null;
+
+  /* The first shared-mode search doubles as the proxy probe: a copy of index.html sitting alone on
+     a static host has nothing behind PROXY_PATH, and the 404 that comes back is the only way to
+     find that out. Remembering it for the session turns "one wasted request per search" into "one
+     wasted request per session", and every later search takes the nokey branch above before any
+     request is made. The key prompt is also the useful answer here, where "Search is unavailable
+     right now" would be true but would not tell the visitor what to do about it.
+
+     Written through writeStore, so a browser blocking storage costs a request per search rather
+     than throwing. This render also flips the About and Settings prose to its solo wording, since
+     sharedAllowanceExists() has just become false. */
+  if (mode === "shared" && proxyUnavailable(outcome.status)) {
+    writeStore(sessionStorage, PROXY_UNAVAILABLE_KEY, "1");
+    fail("nokey");
+    return;
+  }
 
   if (outcome.status !== undefined) {
     fail(outcome.status);
