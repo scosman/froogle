@@ -959,17 +959,17 @@ function proxyNote(status, engineName) {
   return null;
 }
 
-/* The line under the Settings form: what key, if any, this browser will use. It deliberately says
-   nothing about the mode, which the radios above already show.
+/* The one thing about keys the form above cannot show: that this copy has a key compiled into the
+   file, which beats anything saved in the browser.
 
-   An empty browser says nothing at all, because the empty field above already does: the field is
-   write-only, so blank is exactly "no key here". */
-function keyStateText({ builtIn, saved, engineName } = {}) {
-  if (builtIn) {
-    return "This copy of " + resolveEngineName(engineName) + " has a key built in, which takes "
-      + "precedence over anything saved here.";
-  }
-  return saved ? "A key is saved in this browser." : "";
+   A key saved in this browser gets no line. The Clear button beside the field appears only when
+   there is one to remove, so its presence already says a key is held — and a sentence repeating
+   that is a second thing to keep in step with the first. A built-in key has no such tell: it lives
+   in the file, not in this browser, and nothing else on the page would mention it. */
+function keyStateText({ builtIn, engineName } = {}) {
+  if (!builtIn) return "";
+  return "This copy of " + resolveEngineName(engineName) + " has a key built in, which takes "
+    + "precedence over anything saved here.";
 }
 
 /* Why Save cannot commit the form as it stands, or null when it can.
@@ -1331,7 +1331,6 @@ function renderKeyField() {
 
   const line = keyStateText({
     builtIn: typeof API_KEY === "string" && Boolean(API_KEY.trim()),
-    saved: savedKey,
     engineName: ENGINE_NAME,
   });
   setStatus(el.keyState, [keyFeedback, line].filter(Boolean).join(" "));

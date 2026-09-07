@@ -762,18 +762,17 @@ test("proxyNote states the deployment fact and gives no advice", () => {
   }
 });
 
-test("keyStateText reports the key this browser holds, and nothing about the mode", () => {
-  // The mode line above it owns the mode; two lines describing it could drift apart.
-  assert.equal(core.keyStateText({ builtIn: false, saved: true }), "A key is saved in this browser.");
-  // Nothing at all for an empty browser: the write-only key field above is blank, which says it.
-  assert.equal(core.keyStateText({ builtIn: false, saved: false }), "");
+test("keyStateText speaks only for a built-in key", () => {
+  // A key saved in this browser gets no line: the Clear button beside the field appears only when
+  // there is one to remove, so the form already says it.
+  assert.equal(core.keyStateText({ builtIn: false }), "");
   assert.equal(core.keyStateText(), "");
-  assert.match(core.keyStateText({ builtIn: true, saved: true }), /has a key built in/);
-  assert.match(core.keyStateText({ builtIn: true, saved: false, engineName: RENAMED }),
+  // A built-in key has no such tell — it is in the file, not the browser — so it keeps its line.
+  assert.match(core.keyStateText({ builtIn: true }), /has a key built in/);
+  assert.match(core.keyStateText({ builtIn: true, engineName: RENAMED }),
     new RegExp("copy of " + RENAMED));
-  for (const line of [core.keyStateText({ saved: true }), core.keyStateText({ builtIn: true })]) {
-    assert.doesNotMatch(line, /proxied|direct|mode/i);
-  }
+  // It says nothing about the mode; the radios above own that.
+  assert.doesNotMatch(core.keyStateText({ builtIn: true }), /proxied|direct|mode/i);
 });
 
 test("settingsError refuses only the mode that could not search once saved", () => {

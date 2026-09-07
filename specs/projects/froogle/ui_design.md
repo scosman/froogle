@@ -222,7 +222,7 @@ SEARCH MODE
 
 [ Save ]
 
-A key is saved in this browser.          <- state line: the saved key, and Save's feedback
+Settings saved.                          <- state line: Save's feedback, and a built-in key
 ```
 
 The key field is indented to the choice bodies' 25px, inside the Direct choice rather than under a
@@ -257,11 +257,11 @@ deployment, so the choice is disabled rather than offered and left to fail. `mis
 a proxy — so the radio stays usable and the stored preference is left intact, to be honoured the
 moment one answers.
 
-The second state line reports only what key this browser holds — "A key is saved in this browser.",
-or a note that this copy has one built in, or nothing at all when the browser is empty, because the
-write-only field above is blank and has already said so. It says nothing about the mode: the line
-above it owns that, and two lines describing the same thing are two lines that can drift apart.
-Save's own feedback is prefixed to it.
+The second state line carries Save's feedback, and one standing sentence: that this copy has a key
+built into the file, which beats anything saved in the browser. Nothing else. A key saved in *this
+browser* gets no line — the Clear button beside the field appears only when there is one to remove,
+so the form has already said it, and a sentence repeating it is a second thing to keep in step with
+the first. A built-in key has no such tell, which is why it keeps one.
 
 ### Saving
 
