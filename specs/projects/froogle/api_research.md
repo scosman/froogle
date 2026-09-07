@@ -36,6 +36,29 @@ The SDKs build the path as `/v1/{endpoint}` and append `/public` when no API key
 * `X-API-Key: keen_...` — only when keyed.
 * `Content-Type: application/json` on search; `Accept: application/json`.
 
+## Correction: the generated schema is stale
+
+Most of this file was reconstructed from Keenable's published SDKs and the OpenAPI schema shipped
+inside `@keenable/client`, because `docs.keenable.ai` is unreachable from the authoring
+environment. The live docs at `docs.keenable.ai/api-reference/search` turn out to document more
+than that generated schema contains. Where they disagree, the live docs win.
+
+Documented request parameters, in full:
+
+| Parameter | Notes |
+|---|---|
+| `query` | required |
+| `site` | restrict to one domain |
+| `acquired_after` / `acquired_before` | index-time filters |
+| `published_after` / `published_before` | publication-date filters |
+| `query_time` | point-in-time search: excludes pages acquired after this instant, and re-bases relative deltas |
+| `snippet_max_length` | integer, **180-10000**, default unspecified (~2000 observed) |
+| `max_results` | integer, **1-50**, default 10 |
+
+`mode` does **not** appear in the documented parameter list, though the API's own error message
+names it as supported and both official SDKs send `"pro"` by default. It is accepted but
+unpromised; treat it as best-effort rather than contract.
+
 ## Search request
 
 ```json
@@ -183,8 +206,9 @@ access-control-expose-headers: Content-Type,Authorization,X-Request-Id
 
 ### Still open
 
-* Does any undocumented count parameter raise the result count above 10?
-* Is `snippet_max_length` actually honored?
+* Exact `snippet_max_length` behavior: bounds are documented and enforced, but a request for 2000
+  returned 2025-2073 character snippets, matching the uncapped baseline. Whether it truncates or
+  merely rounds out to a boundary is unconfirmed. Only payload size is at stake.
 
 ### The MCP endpoint is not a way around this
 

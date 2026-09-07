@@ -189,13 +189,18 @@ POST <endpoint>
 Content-Type: application/json
 X-API-Key: <key>          (direct mode only)
 
-{ "query": "...", "mode": "pro", "snippet_max_length": 300, ...filters }
+{ "query": "...", "mode": "pro", "max_results": 25, "snippet_max_length": 400, ...filters }
 ```
 
 * `mode` is always `"pro"`. `"realtime"` is faster but shallower, and depth matters more than
-  latency for a web SERP.
-* `snippet_max_length` caps the returned page text. It is absent from Keenable's OpenAPI schema but
-  sent by both of their official SDKs, so it is treated as best-effort and the UI truncates anyway.
+  latency for a web SERP. Note that `mode` is absent from Keenable's documented parameter list
+  even though the API accepts it and both official SDKs send it; it is unpromised, so the client
+  must not break if it is ever rejected.
+* `max_results` is set to 25. Documented range is 1-50, default 10; measured working at 25.
+* `snippet_max_length` caps the returned page text. Documented range 180-10000; outside it the API
+  returns 400. Snippets otherwise run ~2,000 characters each, which at 25 results is tens of
+  kilobytes of prose to render two lines apiece, so this is a real payload saving. The UI truncates
+  regardless, since the cap appears to be approximate.
 * `credentials` is never set to `"include"`. Keenable returns
   `Access-Control-Allow-Credentials: true`, and there is no reason to attach cookies to a search.
 * Requests are aborted after 15 seconds via `AbortSignal`.
@@ -207,8 +212,9 @@ X-API-Key: <key>          (direct mode only)
 Response shape: `{ query, mode, results: [{ title, url, description, snippet?, published_at?, acquired_at? }] }`.
 
 Every returned result is rendered, in the order given. There is **no pagination**: Keenable exposes
-no `limit`, `offset`, `page`, or cursor, and returns no total. The list simply ends. No pager
-control is drawn, because there is no second page to request.
+no `offset`, `page`, or cursor, and returns no total — `max_results` sets the size of the single
+response and nothing addresses a second page. The list simply ends, and no pager control is drawn,
+because there is no second page to request.
 
 Each result renders as:
 
@@ -297,12 +303,12 @@ countdown is possible in direct mode; a limit is discoverable only when a 429 ar
 
 ## Open items
 
-* **Result count.** The keyless endpoint returns **10 results** for a typical query. No count
-  parameter exists in Keenable's schema or SDKs; a probe of undocumented names (`limit`, `count`,
-  `top_k`, `num_results`, `max_results`) against the keyed endpoint is still outstanding. If one
-  works it is a one-line addition; if not, 10 results with no second page stands, which matches
-  the classic SERP shape anyway.
-* **`snippet_max_length`** is sent by both official SDKs but absent from the OpenAPI schema.
-  Whether it is honored is still unmeasured, which is why the UI truncates regardless.
+* **Exact `snippet_max_length` behavior.** The bounds (180-10000) are measured, but a value of
+  2000 returned snippets of 2025-2073 characters, identical to the uncapped baseline. Whether the
+  cap truncates at all, or merely rounds out to a sentence boundary, is being confirmed. The UI
+  truncates independently either way; only the payload saving is at stake.
+* **`query_time`** is a documented point-in-time search parameter: it excludes pages acquired after
+  a given instant. Not used in v1, but a natural fit for a later "search the web as it was"
+  feature.
 * **Ask Keenable to allowlist `X-Keenable-Title`.** If they do, keyless becomes available to the
   browser and can become the zero-signup default, with the proxy demoted or removed.
