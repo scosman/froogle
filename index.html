@@ -391,7 +391,7 @@ a:visited { color: var(--link-visited); }
 <!-- ---- About ---- -->
 <section id="view-about" class="page" hidden>
   <div class="page__inner prose">
-    <h1><span data-engine-name>Froogle</span></h1>
+    <h1>About <span data-engine-name>Froogle</span></h1>
 
     <p>
       <span data-engine-name>Froogle</span> is a fast ad-free search engine. It's like search
@@ -399,41 +399,46 @@ a:visited { color: var(--link-visited); }
     </p>
 
     <ul>
-      <li><strong>Fast:</strong> results in about 200ms</li>
       <li>
-        <strong>Ad-free:</strong> no ads, ever. We use the free tier of Keenable's API so there's
-        no catch.
+        <strong>Ad-free:</strong> no ads, ever. 
       </li>
       <li><strong>Simple:</strong> no AI, no personalization. It's a list of web links.</li>
       <li>
-        <strong>Private:</strong> pretty good privacy compared to major search engines (see below
-        for details).
+        <strong>Private:</strong> pretty good privacy compared to major search engines. We don't track anything, although our search API provider may. See below
+        for details.
       </li>
+      <li><strong>Fast:</strong> nearly instant results.</li>
     </ul>
+
+    <h2>Powered by Keenable</h2>
 
     <p>
       <span data-engine-name>Froogle</span> is powered by the
-      <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a> API. It's not
+      <a href="https://keenable.ai">Keenable</a>, a web search infrastructure provider. We may add other search API providers in the future.
+    </p>
+
+    <p>
+      <span data-engine-name>Froogle</span> is not
       associated with Keenable.
     </p>
 
     <h2>Privacy</h2>
     <p>
-      Our search is powered by the <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>
+      Our search is powered by the <a href="https://keenable.ai">Keenable</a>
       API. Keenable will see all search queries and may track your requests. See their
-      <a href="https://keenable.ai/privacy" rel="noopener noreferrer">privacy policy</a> for details.
+      <a href="https://keenable.ai/privacy">privacy policy</a> for details about how they handle your data.
     </p>
 
     <p>
-      On the <span data-engine-name>Froogle</span> side there are two modes with different privacy
-      tradeoffs:
+      On the <span data-engine-name>Froogle</span> side we don't log or track anything. There are two modes with different privacy
+      tradeoffs you can choose from:
     </p>
     <ul>
       <li>
         <strong>Proxied mode (default):</strong> queries are proxied through
         <span data-engine-name>Froogle</span>'s servers to the Keenable API. Nothing is logged or
-        tracked by <span data-engine-name>Froogle</span> servers. Keenable may still log and track,
-        but we don't pass them any personal identifier or your IP, so your traffic is mixed with
+        tracked by <span data-engine-name>Froogle</span> servers. Keenable may still log and track queries,
+        but we don't pass them any personal identifier or your IP; your traffic is mixed with
         other <span data-engine-name>Froogle</span> users. This mode may hit rate limits. Zero
         setup.
       </li>
@@ -441,17 +446,17 @@ a:visited { color: var(--link-visited); }
         <strong>Direct mode:</strong> you can enter a Keenable API key, which is saved to your
         browser's local storage. All requests go directly from your browser to Keenable;
         <span data-engine-name>Froogle</span> never sees your queries. You'll need to create an
-        account with Keenable and set this mode up. Keenable will be able to identify you via this
+        account with Keenable to set up this mode. Keenable will be able to identify you via the
         unique API key.
       </li>
     </ul>
     <p>You can change your mode in <a href="#settings">settings</a>.</p>
 
-    <h2>Self hosting</h2>
+    <h2>Self hosting &amp; Open Source</h2>
     <p>
-      <span data-engine-name>Froogle</span> is open source. You can download it and self host. It
+      <span data-engine-name>Froogle</span> is open source. You can read the code, download it and self host. It
       can be as simple as saving <code>index.html</code>. See
-      <a href="https://github.com/scosman/froogle" rel="noopener noreferrer">Froogle on GitHub</a>.
+      <a href="https://github.com/scosman/froogle">Froogle on GitHub</a>.
     </p>
   </div>
 </section>
@@ -493,7 +498,7 @@ a:visited { color: var(--link-visited); }
           <p class="choice__body">
             All requests go directly from your browser to Keenable, using the API key below;
             <span data-engine-name>Froogle</span> never sees your queries. You'll need to create a
-            free account with <a href="https://keenable.ai" rel="noopener noreferrer">Keenable</a>
+            free account with <a href="https://keenable.ai">Keenable</a>
             and set this mode up. Keenable will be able to identify you via this unique API key.
           </p>
           <div class="key-field" id="key-field">
