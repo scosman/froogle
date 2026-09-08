@@ -43,10 +43,11 @@ Proxied.
 Settings is a form: the radio and the Clear link are pending until you press Save, which commits
 the mode and the key together or neither. That is what makes Direct-with-no-key unreachable —
 saving it is refused on the key field rather than accepted and then reported everywhere as
-"Mode: no key".
+"Settings: no key".
 
 The mode is applied per search, so saving Settings takes effect immediately with no reload, and the
-mode in use is shown on every view next to the About and Settings links.
+mode in use is shown on every view by the Settings link itself, which reads "Settings: Proxied",
+"Settings: Direct" or "Settings: no key".
 
 Where a choice cannot be honoured, Froogle says so rather than quietly doing something else:
 
@@ -265,13 +266,18 @@ shipping a change to the browser layer.
 **Mode**
 
 - [ ] On a deployed Worker, or against `node src/serve.mjs`, a first-time visitor searches with no
-      setup, the mode line reads "Mode: Proxied", and the request goes to `/api/search`.
-- [ ] Moving the mode radio changes **nothing** until Save: the mode line in the utility row, the
-      state line under the radios, and a search all keep reporting the saved mode.
+      setup, the Settings link reads "Settings: Proxied", and the request goes to `/api/search`.
+- [ ] Moving the mode radio changes **nothing** until Save: the Settings link in the utility row,
+      the state line under the radios, and a search all keep reporting the saved mode.
 - [ ] Save with Direct chosen and no key saved is **refused** — the key field goes red, the reason
       appears under it, focus lands in it, and neither the mode nor the key is written.
-- [ ] Save with Direct and a key flips the mode line and the next search to direct with no reload.
-- [ ] Save with a key Keenable rejects writes **nothing**, the mode included.
+- [ ] Save with Direct and a key flips the Settings link and the next search to direct with no
+      reload.
+- [ ] Save with a key Keenable rejects writes **nothing**, the mode included, and says so in red
+      **under the key field** with focus moved there — not in the state lines under Save.
+- [ ] Typing in the key field selects the **Direct** radio, and like the radio itself changes
+      nothing until Save; moving the radio back to Proxied before saving still saves the key.
+- [ ] The key field shows what is typed in it, and is still blank on arrival when a key is saved.
 - [ ] Clear, beside the key field's label, only stages the removal: the key survives until Save,
       and Save under Direct with nothing typed is refused like any other keyless Direct.
 - [ ] Saving Direct and then Proxied again does **not** lose the saved key.
@@ -287,8 +293,8 @@ shipping a change to the browser layer.
 - [ ] On a working hosted build, going offline (DevTools → Network → Offline) and searching gives
       "Search is unavailable right now" — and then, back online, the very next search works. A
       dropped connection must **not** retire proxied mode for the session.
-- [ ] The Settings mode line, the utility-row mode line and an attempted search all agree, in every
-      combination of chosen mode, key present/absent, and `file://`/hosted.
+- [ ] The Settings state line, the utility-row Settings link and an attempted search all agree, in
+      every combination of chosen mode, key present/absent, and `file://`/hosted.
 - [ ] Loads and searches from `file://` with a stored key.
 - [ ] The timing in the utility row shows a real elapsed time on results, and is absent before a
       search, on an error, and on About and Settings.

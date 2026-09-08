@@ -108,7 +108,7 @@ a:visited { color: var(--link-visited); }
   cursor: default;
 }
 
-/* ---- utility row: About, Settings, the mode line, and the search timing ---- */
+/* ---- utility row: About, the Settings link, and the search timing ---- */
 
 .utility {
   display: flex;
@@ -117,8 +117,11 @@ a:visited { color: var(--link-visited); }
   gap: 22px;
   font-size: 12px;
 }
-.utility__mode,
-.utility__mode:visited { color: var(--ink-muted); }
+/* Chrome, not content: these links sit beside the search box on every view, and the link blue
+   would give them more weight than the results they sit above. Grey in both states, so a visited
+   About does not read differently from an unvisited one. */
+.utility a,
+.utility a:visited { color: var(--ink-muted); }
 .timing {
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -243,7 +246,6 @@ a:visited { color: var(--link-visited); }
 .choice input { accent-color: var(--link); }
 .choice input:disabled { cursor: default; }
 .choice input:disabled ~ .choice__name { color: var(--ink-muted); }
-.choice__default { font-weight: 400; font-size: 13px; color: var(--ink-muted); }
 .prose p.choice__body { margin: 6px 0 0 25px; font-size: 14px; line-height: 1.6; }
 .prose p.choice__note { margin: 6px 0 0 25px; font-size: 13px; line-height: 1.6; color: var(--alert); }
 .choice-group + .choice-group { margin-top: 22px; }
@@ -349,8 +351,7 @@ a:visited { color: var(--link-visited); }
     </form>
     <nav class="utility" aria-label="Site">
       <a href="#about">About</a>
-      <a href="#settings">Settings</a>
-      <a class="utility__mode" href="#settings" data-mode-note></a>
+      <a href="#settings" data-settings-link></a>
       <span class="timing" id="timing" hidden></span>
     </nav>
   </div>
@@ -373,8 +374,7 @@ a:visited { color: var(--link-visited); }
     </div>
     <nav class="utility" aria-label="Site">
       <a href="#about">About</a>
-      <a href="#settings">Settings</a>
-      <a class="utility__mode" href="#settings" data-mode-note></a>
+      <a href="#settings" data-settings-link></a>
     </nav>
   </form>
 </section>
@@ -478,7 +478,6 @@ a:visited { color: var(--link-visited); }
             <input type="radio" name="mode" value="proxied" id="mode-proxied"
                    aria-describedby="proxy-note">
             <span class="choice__name">Proxied</span>
-            <span class="choice__default">default</span>
           </label>
           <p class="choice__body">
             Queries are proxied through <span data-engine-name>Froogle</span>'s servers to the
@@ -507,7 +506,10 @@ a:visited { color: var(--link-visited); }
               <button class="link-button" type="button" id="key-clear" hidden
                       aria-label="Clear the saved Keenable API key">Clear</button>
             </div>
-            <input class="key-input" id="key-input" type="password" autocomplete="off"
+            <!-- type="text", not "password": a Keenable key is not a shared secret worth
+                 shoulder-surfing, and hiding it costs the visitor the one thing that matters when
+                 a key is rejected — being able to read back what they pasted. -->
+            <input class="key-input" id="key-input" type="text" autocomplete="off"
                    autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="keen_…"
                    aria-describedby="key-note">
             <p class="key-field__note" id="key-note" hidden></p>
@@ -936,14 +938,14 @@ function keyCheckResult(outcome) {
   return { save: true, text: "Key saved, but it could not be checked just now." };
 }
 
-/* The always-visible mode line in the utility row, on every view. It names the mode a search
-   started right now would actually use, which is why "nokey" gets its own wording rather than
-   showing "Direct" for a page that cannot search. It is always a link to Settings, so the line
-   that reports the mode is also the way to change it. */
-function modeLabel(mode) {
-  if (mode === "proxied") return "Mode: Proxied";
-  if (mode === "direct") return "Mode: Direct";
-  return "Mode: no key";
+/* The text of the always-visible Settings link in the utility row, on every view. One link does
+   both jobs: it names the mode a search started right now would actually use — which is why
+   "nokey" gets its own wording rather than showing "Direct" for a page that cannot search — and
+   it is the way to change it. */
+function settingsLabel(mode) {
+  if (mode === "proxied") return "Settings: Proxied";
+  if (mode === "direct") return "Settings: Direct";
+  return "Settings: no key";
 }
 
 /* The one-line reason the Proxied choice cannot be honoured here, or null when it can.
@@ -958,9 +960,10 @@ function proxyNote(status, engineName) {
     return "Not available here: this copy of " + name + " has no server behind it to proxy "
       + "through.";
   }
-  if (status === "missing") {
-    return "Not available here: nothing is answering at this copy of " + name + "'s proxy path.";
-  }
+  /* Deliberately plainer than the fact behind it: a probe found nothing at the proxy path. That
+     is the operator's problem, not the visitor's, and naming paths and probes tells them nothing
+     they can act on — the mode is simply not available on this instance. */
+  if (status === "missing") return "Not available on the " + name + " instance.";
   return null;
 }
 
@@ -981,9 +984,10 @@ function keyStateText({ builtIn, engineName } = {}) {
 
    One combination is refusable, and only on Save: Direct chosen with no key anywhere — none
    typed, none staying saved once a staged Clear is applied, none built into the file. Committing
-   it would store a mode that cannot search, which is the "Mode: no key" state the form exists to
-   make unreachable. Everything else commits: Proxied never needs a key, and Direct with the field
-   left blank over an already-saved key is the field's ordinary resting state, not an error.
+   it would store a mode that cannot search, which is the "Settings: no key" state the form
+   exists to make unreachable. Everything else commits: Proxied never needs a key, and Direct
+   with the field left blank over an already-saved key is the field's ordinary resting state, not
+   an error.
 
    `proxyUsable` — proxyStatus() === "possible" — decides whether Proxied is offered as the way
    out. Where it is not, this copy of the page has no searching mode that works without a key, and
@@ -1039,9 +1043,9 @@ const el = {
   notice: document.getElementById("notice"),
   resultList: document.getElementById("results"),
   timing: document.getElementById("timing"),
-  /* One mode line per utility row — home has its own, the masthead carries the other — rendered
-     from the same state by the same function, so they cannot disagree. */
-  modeNotes: document.querySelectorAll("[data-mode-note]"),
+  /* One Settings link per utility row — home has its own, the masthead carries the other —
+     rendered from the same state by the same function, so they cannot disagree. */
+  settingsLinks: document.querySelectorAll("[data-settings-link]"),
   modeChoices: document.getElementById("mode-choices"),
   modeProxied: document.getElementById("mode-proxied"),
   modeDirect: document.getElementById("mode-direct"),
@@ -1097,7 +1101,7 @@ let keyChecking = false;
 
 /* Settings is a form, and these three are its pending state: the radio selection, a Clear that has
    been asked for but not yet applied, and the reason the last Save refused. None of them is read
-   by anything outside the form — the mode line in the utility row, the state line under the
+   by anything outside the form — the Settings link in the utility row, the state line under the
    radios and the search path all read the *saved* preference through modePreference(), so the
    masthead cannot start reporting a mode that has not been committed. Save is the only thing that
    turns any of this into storage. */
@@ -1139,8 +1143,8 @@ const currentProxyStatus = () => proxyStatus({
   proxyKnownBad: proxyKnownBad(),
 });
 
-/* The single source of truth for the mode a search would use right now. The utility-row mode line,
-   the Settings state line and the search path all derive from it, so they cannot disagree.
+/* The single source of truth for the mode a search would use right now. The utility-row Settings
+   link, the Settings state line and the search path all derive from it, so they cannot disagree.
 
    The key is a parameter so a caller that has already resolved it — the search path, which needs
    the key itself for the header — cannot end up deciding the mode from a different answer than
@@ -1273,9 +1277,9 @@ function renderResults() {
   for (const result of state.results) el.resultList.appendChild(resultItem(result));
 }
 
-function renderModeLine() {
-  const label = modeLabel(currentMode());
-  for (const node of el.modeNotes) node.textContent = label;
+function renderSettingsLinks() {
+  const label = settingsLabel(currentMode());
+  for (const node of el.settingsLinks) node.textContent = label;
 }
 
 /* Real measured time or nothing: the number in the reference design is a promise about this
@@ -1355,7 +1359,7 @@ function render() {
 
   renderNotice();
   renderResults();
-  renderModeLine();
+  renderSettingsLinks();
   renderTiming();
   renderModeChoice();
   renderKeyField();
@@ -1642,7 +1646,10 @@ async function saveSettings() {
   render();
 
   /* The finally clause is the point: a throw between here and the end would otherwise leave Save
-     disabled for good, with only a reload to undo it. */
+     disabled for good, with only a reload to undo it. Focus follows a refusal out of it, for the
+     same reason the synchronous refusal above moves focus: the note is the field's description,
+     so landing there is what says it. */
+  let refused = false;
   try {
     const { save, text } = keyCheckResult(await requestSearch(KEY_CHECK_BODY, {
       mode: "direct",
@@ -1650,8 +1657,14 @@ async function saveSettings() {
     }));
     if (!save) {
       /* keyCheckResult's own wording says nothing was saved, and nothing was: not the key, and
-         not the mode that was to go with it. */
-      if (check === keyCheckSeq) keyFeedback = text;
+         not the mode that was to go with it. It is a refusal of the key, so it goes where the
+         refusal Save raises itself goes — red under the field, with the field reddened — rather
+         than in the state line below the button, which reports what is saved. */
+      if (check === keyCheckSeq) {
+        keyError = text;
+        keyFeedback = "";
+        refused = true;
+      }
       return;
     }
     const failure = commitSettings({ mode, key: typedKey });
@@ -1669,6 +1682,7 @@ async function saveSettings() {
   } finally {
     keyChecking = false;
     render();
+    if (refused) el.keyInput.focus();
   }
 }
 
@@ -1773,12 +1787,19 @@ function start() {
   });
 
   /* Typing is what answers the refusal above, and it also supersedes a staged Clear: a replacement
-     key is not a removal. Both cases have to reach render — the error, the cue and the Clear link
+     key is not a removal. It is a choice of Direct, too — the field belongs to that radio, and a
+     visitor who fills it in under Proxied has otherwise typed a key the mode they are on will
+     never send. Like the radio itself this moves the form's pending state only, so Save still
+     commits the mode and the key together, and it is frozen mid-check for the same reason the
+     radios are. Each case has to reach render — the error, the cue, the Clear link and the radio
      all change — and nothing else here warrants a render per keystroke. */
   el.keyInput.addEventListener("input", () => {
-    const supersedesClear = pendingClear && Boolean(el.keyInput.value.trim());
-    if (!keyError && !supersedesClear) return;
+    const typed = Boolean(el.keyInput.value.trim());
+    const supersedesClear = pendingClear && typed;
+    const selectsDirect = typed && pendingMode !== "direct" && !keyChecking;
+    if (!keyError && !supersedesClear && !selectsDirect) return;
     if (supersedesClear) pendingClear = false;
+    if (selectsDirect) pendingMode = "direct";
     keyError = "";
     render();
   });
@@ -1787,10 +1808,13 @@ function start() {
     event.preventDefault();
     saveSettings().catch((error) => {
       /* saveSettings' own finally has already re-enabled Save; this replaces the stale "Checking
-         that key…" line so the visitor is not left watching a check that has died. */
+         that key…" line so the visitor is not left watching a check that has died. Under the
+         field with the other reasons a key was not saved, not in the state line. */
       console.error(error);
-      keyFeedback = "Something went wrong checking that key. Try again.";
+      keyError = "Something went wrong checking that key. Try again.";
+      keyFeedback = "";
       render();
+      el.keyInput.focus();
     });
   });
 
