@@ -30,7 +30,9 @@ You can change your mode in settings.
  - Simple: download index.html, open it, setup and API key, and search. You can host it anywhere, including your Downloads folder.
  - Proxy mode: runs a proxy for queries. Download this repo and run `node src/serve.mjs`.
 
-### Powered by Keenable
+See the [technical docs](./specs/DESIGN.md) for details.
+
+### Powered by Keenable.ai
 
 Froogle is powered by the [Keenable](https://keenable.ai), a web search infrastructure provider. We may add other search API providers in the future.
 
