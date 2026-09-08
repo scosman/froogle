@@ -744,10 +744,10 @@ test("settingsLabel names the mode a search would actually use", () => {
 test("proxyNote gives a reason only where Proxied cannot be honoured", () => {
   assert.equal(core.proxyNote("possible", "Froogle"), null);
   assert.match(core.proxyNote("blocked", "Froogle"), /no server behind it/);
-  assert.match(core.proxyNote("missing", "Froogle"), /nothing is answering/);
+  assert.match(core.proxyNote("missing", "Froogle"), /Not available on the Froogle instance/);
   assert.match(core.proxyNote("blocked", RENAMED), new RegExp("copy of " + RENAMED));
-  assert.match(core.proxyNote("missing", RENAMED), new RegExp("copy of " + RENAMED));
-  assert.match(core.proxyNote("missing"), /copy of Froogle/);
+  assert.match(core.proxyNote("missing", RENAMED), new RegExp("the " + RENAMED + " instance"));
+  assert.match(core.proxyNote("missing"), /the Froogle instance/);
 });
 
 test("proxyNote states the deployment fact and gives no advice", () => {

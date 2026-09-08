@@ -209,7 +209,7 @@ Everything in Settings is one form, saved by one button:
 ```
 SEARCH MODE
 
-(o) Proxied  default
+(o) Proxied
     Queries are proxied through Froogle's servers…            <- the About bullet
     Not available here: …                                     <- 13px --alert, when it applies
 
@@ -217,7 +217,7 @@ SEARCH MODE
     All requests go directly from your browser to Keenable…   <- the About bullet
 
     Keenable API key   Clear        <- 13px --ink-muted label; 12px --link, only when a key is saved
-    [ keen_…                    ]   <- underlined field, 420px, write-only
+    [ keen_…                    ]   <- underlined field, 420px, plain text
     Direct mode needs a Keenable…   <- 13px, --alert on a refusal, --ink-muted for a staged clear
 
 [ Save ]
@@ -227,8 +227,17 @@ Settings saved.                          <- state line: Save's feedback, and a b
 
 The key field is indented to the choice bodies' 25px, inside the Direct choice rather than under a
 heading of its own: it is what that choice needs, and one paragraph explaining a key is enough for
-the page. It stays usable while Proxied is selected, because saving a key before switching is a
-reasonable order to do things in and Proxied never discards one.
+the page. Typing into it selects Direct, since the field belongs to that choice and a key entered
+under Proxied would be one the mode in force never sends; like the radio it moves the pending
+selection only, so a visitor who does want the key saved under Proxied moves the radio back before
+saving. It is an ordinary text field, not a password one — a Keenable key is not a shared secret
+worth hiding, and hiding it would take away the one thing that matters when a key is rejected:
+reading back what was pasted. It still never reads a saved key back, so it is blank on arrival
+even when one is stored.
+
+Neither radio is tagged "default". Proxied is the one selected on a first visit, which says it
+without a label, and by the time anyone is reading the form the tag describes a state that may no
+longer be theirs.
 
 Both choices are always shown with their About wording. There is no line restating which one is
 selected: the radios already show it, and a sentence saying the same thing again is noise on a
@@ -243,7 +252,7 @@ dimmed:
 | Proxy status | When | Note | Radio |
 |---|---|---|---|
 | `blocked` | `file://`, or `PROXY_PATH` empty | "Not available here: this copy of Froogle has no server behind it to proxy through." | Disabled |
-| `missing` | A request proved nothing answers at `PROXY_PATH` | "Not available here: nothing is answering at this copy of Froogle's proxy path." | **Enabled** |
+| `missing` | A request proved nothing answers at `PROXY_PATH` | "Not available on the Froogle instance." | **Enabled** |
 
 Each note states a fact about the deployment and stops there. What to *do* about it belongs to the
 state line below the radios, which is the only one of the two that knows whether a key is saved: a
@@ -270,6 +279,11 @@ anywhere — none typed, none staying saved, none built into the file. That refu
 field and writes nothing at all: not the key, not the mode. A key typed into the field is still
 checked against Keenable first, and a rejected one likewise saves neither half.
 
+Both refusals land in the same place, in `--alert` under the field with the field reddened and
+focus moved into it — the key is what has to change, and the state lines below Save report what is
+*saved*, which after a refusal is nothing new. The state lines keep the outcomes that did save,
+the two "Key saved, but…" ones included.
+
 The refusal offers the alternative only where it exists: "Direct mode needs a Keenable API key. Add
 one, or choose Proxied." where the proxy is usable, and "…Add one to search." where it is not.
 Telling a `file://` visitor to choose Proxied would contradict the note two lines above saying
@@ -278,7 +292,7 @@ already follow.
 
 | Save, with | Result |
 |---|---|
-| Direct, field blank, a key saved or built in | Committed. Blank is the write-only field's resting state, not an error |
+| Direct, field blank, a key saved or built in | Committed. Blank is the field's resting state over a saved key, not an error |
 | Direct, field blank, no key anywhere | Refused on the key field. Nothing written |
 | Direct, a key typed | Checked with Keenable; committed together, or neither on a rejection |
 | Proxied, field blank | Committed. A saved key is left alone, not discarded |

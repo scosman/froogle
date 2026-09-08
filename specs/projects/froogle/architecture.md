@@ -510,8 +510,10 @@ Browser-level behavior that cannot be unit tested, recorded in the README:
 * Loads and searches from `file://` with a stored key, with Proxied shown disabled and its reason.
 * Moving the mode radio changes nothing until Save: the utility-row Settings link, the Settings
   state line and a search all keep reporting the saved mode.
-* A refused Save — Direct with no key, or a staged Clear under Direct — writes neither the mode nor
-  the key, reddens the field and moves focus to it.
+* A refused Save — Direct with no key, a staged Clear under Direct, or a key Keenable rejects —
+  writes neither the mode nor the key, reddens the field, puts the reason under it and moves focus
+  there.
+* Typing in the key field selects Direct, and like the radio commits nothing until Save.
 * Saving Direct and back to Proxied leaves a saved key intact.
 * Back and forward move between home, results, about, and settings.
 * A legacy `?q=` URL normalizes to `#q=` with no extra history entry.

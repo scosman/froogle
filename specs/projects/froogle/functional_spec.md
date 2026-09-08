@@ -195,9 +195,11 @@ Static prose in the same page. Content:
 One form, saved by one button. Two radios, **Proxied** (default) and **Direct**, each with the
 About page's wording beneath it and a link to Keenable for a free key in the Direct one. The key
 field is indented inside the Direct choice — it is that choice's requirement, not a section of its
-own — and is write-only: it shows nothing back and is blank whenever a key is already saved. Where
-Proxied cannot be honoured, a note under it gives the one-line reason; the radio is disabled only
-where a proxy is structurally impossible, never merely because a request found none.
+own. Typing into it selects Direct, the choice the key is for. Its text is visible, so a pasted key
+can be read back, but it never reads a *saved* key back: it is blank whenever one is already
+stored. Where Proxied cannot be honoured, a note under it gives the one-line reason; the radio is
+disabled only where a proxy is structurally impossible, never merely because a request found
+none.
 
 Below the form, two lines: what searches will actually do — the only place that can say the chosen
 mode is not the one running — and what key this browser holds, which says nothing about the mode.
@@ -207,13 +209,15 @@ sits beside the key field's label whenever a key is saved and stages its removal
 performing it. Save then commits the mode and the key as one action:
 
 * A typed key is validated with a real search request first. A rejected key saves nothing at all,
-  the mode included, rather than silently storing a bad key.
+  the mode included, rather than silently storing a bad key. The rejection appears under the key
+  field in `--alert` with focus moved there, in the same place as the refusal below, since the key
+  is what has to change.
 * Direct with no key anywhere — none typed, none staying saved, none built into the file — is
   refused on the key field, and nothing is written. This is what keeps a mode that cannot search
   from being stored. The visitor is told to add a key, or to choose Proxied where Proxied is
   actually usable — never on a copy whose own note says it is not.
-* Direct with the field left blank over a key that is already saved is valid: blank is the
-  write-only field's resting state.
+* Direct with the field left blank over a key that is already saved is valid: blank is the field's
+  resting state over a saved key.
 * Proxied requires no key and discards none.
 
 ## Search behavior

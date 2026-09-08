@@ -246,7 +246,6 @@ a:visited { color: var(--link-visited); }
 .choice input { accent-color: var(--link); }
 .choice input:disabled { cursor: default; }
 .choice input:disabled ~ .choice__name { color: var(--ink-muted); }
-.choice__default { font-weight: 400; font-size: 13px; color: var(--ink-muted); }
 .prose p.choice__body { margin: 6px 0 0 25px; font-size: 14px; line-height: 1.6; }
 .prose p.choice__note { margin: 6px 0 0 25px; font-size: 13px; line-height: 1.6; color: var(--alert); }
 .choice-group + .choice-group { margin-top: 22px; }
@@ -479,7 +478,6 @@ a:visited { color: var(--link-visited); }
             <input type="radio" name="mode" value="proxied" id="mode-proxied"
                    aria-describedby="proxy-note">
             <span class="choice__name">Proxied</span>
-            <span class="choice__default">default</span>
           </label>
           <p class="choice__body">
             Queries are proxied through <span data-engine-name>Froogle</span>'s servers to the
@@ -508,7 +506,10 @@ a:visited { color: var(--link-visited); }
               <button class="link-button" type="button" id="key-clear" hidden
                       aria-label="Clear the saved Keenable API key">Clear</button>
             </div>
-            <input class="key-input" id="key-input" type="password" autocomplete="off"
+            <!-- type="text", not "password": a Keenable key is not a shared secret worth
+                 shoulder-surfing, and hiding it costs the visitor the one thing that matters when
+                 a key is rejected — being able to read back what they pasted. -->
+            <input class="key-input" id="key-input" type="text" autocomplete="off"
                    autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="keen_…"
                    aria-describedby="key-note">
             <p class="key-field__note" id="key-note" hidden></p>
@@ -959,9 +960,10 @@ function proxyNote(status, engineName) {
     return "Not available here: this copy of " + name + " has no server behind it to proxy "
       + "through.";
   }
-  if (status === "missing") {
-    return "Not available here: nothing is answering at this copy of " + name + "'s proxy path.";
-  }
+  /* Deliberately plainer than the fact behind it: a probe found nothing at the proxy path. That
+     is the operator's problem, not the visitor's, and naming paths and probes tells them nothing
+     they can act on — the mode is simply not available on this instance. */
+  if (status === "missing") return "Not available on the " + name + " instance.";
   return null;
 }
 
@@ -1644,7 +1646,10 @@ async function saveSettings() {
   render();
 
   /* The finally clause is the point: a throw between here and the end would otherwise leave Save
-     disabled for good, with only a reload to undo it. */
+     disabled for good, with only a reload to undo it. Focus follows a refusal out of it, for the
+     same reason the synchronous refusal above moves focus: the note is the field's description,
+     so landing there is what says it. */
+  let refused = false;
   try {
     const { save, text } = keyCheckResult(await requestSearch(KEY_CHECK_BODY, {
       mode: "direct",
@@ -1652,8 +1657,14 @@ async function saveSettings() {
     }));
     if (!save) {
       /* keyCheckResult's own wording says nothing was saved, and nothing was: not the key, and
-         not the mode that was to go with it. */
-      if (check === keyCheckSeq) keyFeedback = text;
+         not the mode that was to go with it. It is a refusal of the key, so it goes where the
+         refusal Save raises itself goes — red under the field, with the field reddened — rather
+         than in the state line below the button, which reports what is saved. */
+      if (check === keyCheckSeq) {
+        keyError = text;
+        keyFeedback = "";
+        refused = true;
+      }
       return;
     }
     const failure = commitSettings({ mode, key: typedKey });
@@ -1671,6 +1682,7 @@ async function saveSettings() {
   } finally {
     keyChecking = false;
     render();
+    if (refused) el.keyInput.focus();
   }
 }
 
@@ -1775,12 +1787,19 @@ function start() {
   });
 
   /* Typing is what answers the refusal above, and it also supersedes a staged Clear: a replacement
-     key is not a removal. Both cases have to reach render — the error, the cue and the Clear link
+     key is not a removal. It is a choice of Direct, too — the field belongs to that radio, and a
+     visitor who fills it in under Proxied has otherwise typed a key the mode they are on will
+     never send. Like the radio itself this moves the form's pending state only, so Save still
+     commits the mode and the key together, and it is frozen mid-check for the same reason the
+     radios are. Each case has to reach render — the error, the cue, the Clear link and the radio
      all change — and nothing else here warrants a render per keystroke. */
   el.keyInput.addEventListener("input", () => {
-    const supersedesClear = pendingClear && Boolean(el.keyInput.value.trim());
-    if (!keyError && !supersedesClear) return;
+    const typed = Boolean(el.keyInput.value.trim());
+    const supersedesClear = pendingClear && typed;
+    const selectsDirect = typed && pendingMode !== "direct" && !keyChecking;
+    if (!keyError && !supersedesClear && !selectsDirect) return;
     if (supersedesClear) pendingClear = false;
+    if (selectsDirect) pendingMode = "direct";
     keyError = "";
     render();
   });
@@ -1789,10 +1808,13 @@ function start() {
     event.preventDefault();
     saveSettings().catch((error) => {
       /* saveSettings' own finally has already re-enabled Save; this replaces the stale "Checking
-         that key…" line so the visitor is not left watching a check that has died. */
+         that key…" line so the visitor is not left watching a check that has died. Under the
+         field with the other reasons a key was not saved, not in the state line. */
       console.error(error);
-      keyFeedback = "Something went wrong checking that key. Try again.";
+      keyError = "Something went wrong checking that key. Try again.";
+      keyFeedback = "";
       render();
+      el.keyInput.focus();
     });
   });
 

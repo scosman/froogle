@@ -273,7 +273,11 @@ shipping a change to the browser layer.
       appears under it, focus lands in it, and neither the mode nor the key is written.
 - [ ] Save with Direct and a key flips the Settings link and the next search to direct with no
       reload.
-- [ ] Save with a key Keenable rejects writes **nothing**, the mode included.
+- [ ] Save with a key Keenable rejects writes **nothing**, the mode included, and says so in red
+      **under the key field** with focus moved there — not in the state lines under Save.
+- [ ] Typing in the key field selects the **Direct** radio, and like the radio itself changes
+      nothing until Save; moving the radio back to Proxied before saving still saves the key.
+- [ ] The key field shows what is typed in it, and is still blank on arrival when a key is saved.
 - [ ] Clear, beside the key field's label, only stages the removal: the key survives until Save,
       and Save under Direct with nothing typed is refused like any other keyless Direct.
 - [ ] Saving Direct and then Proxied again does **not** lose the saved key.
