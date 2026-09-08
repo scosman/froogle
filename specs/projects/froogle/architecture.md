@@ -130,7 +130,7 @@ formatDate(iso)         -> string | null
 // to stay evaluable on its own, and SEARCH_ENGINE_NAME is declared above it.
 escapeXml(text) -> string
 errorMessage({ status, mode, engineName }) -> { text, action }   // action: null | "settings"
-modeLabel(mode)                           -> string             // the utility-row mode line
+settingsLabel(mode)                       -> string             // the utility-row Settings link
 proxyNote(status, engineName)             -> string | null      // why Proxied cannot be honoured
 keyStateText({ builtIn, saved, engineName })         -> string   // which key this browser holds
 settingsError({ mode, typedKey, keptKey, proxyUsable }) -> string | null  // why Save refuses
@@ -449,7 +449,7 @@ Cases:
 * `errorMessage` — every status, the mode-dependent difference at 429, the two no-search sentinels
   (`"nokey"` and `"noproxy"`, the latter differing by whether a key is there to fall back on), and
   a non-default `engineName` reaching every message that names the engine.
-* `modeLabel` / `proxyNote` / `keyStateText` — the mode line for each mode; a
+* `settingsLabel` / `proxyNote` / `keyStateText` — the Settings link text for each mode; a
   reason only where Proxied cannot be honoured, stating the deployment fact and giving no advice;
   and that the key line says nothing about the mode and nothing at all for an
   empty browser.
@@ -508,8 +508,8 @@ Calls the adapter's default export with a stub `ASSETS` binding, which records r
 Browser-level behavior that cannot be unit tested, recorded in the README:
 
 * Loads and searches from `file://` with a stored key, with Proxied shown disabled and its reason.
-* Moving the mode radio changes nothing until Save: the utility-row mode line, the Settings state
-  line and a search all keep reporting the saved mode.
+* Moving the mode radio changes nothing until Save: the utility-row Settings link, the Settings
+  state line and a search all keep reporting the saved mode.
 * A refused Save — Direct with no key, or a staged Clear under Direct — writes neither the mode nor
   the key, reddens the field and moves focus to it.
 * Saving Direct and back to Proxied leaves a saved key intact.

@@ -162,10 +162,11 @@ unlike `history.pushState`, which browsers block on `file://` URLs. Back and for
 ### Home
 
 Wordmark, tagline, a single text input and a submit button, centered in the viewport, with a
-utility row beneath: About, Settings, and the mode line. Focus is placed in the input on load.
+utility row beneath: About and the Settings link. Focus is placed in the input on load.
 
-The mode line names the mode a search started now would use — "Mode: Proxied", "Mode: Direct", or
-"Mode: no key" — and always links to Settings.
+The Settings link names the mode a search started now would use — "Settings: Proxied",
+"Settings: Direct", or "Settings: no key" — so the one link both reports the mode and is the way
+to change it.
 
 ### Results
 

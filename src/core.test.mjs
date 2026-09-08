@@ -28,7 +28,7 @@ const EXPORTED = [
   "resultsFrom", "resultTitle", "pickSnippet", "normalizeSnippet", "isLinkableUrl", "displayUrl",
   "formatDate",
   "escapeXml", "errorMessage", "keyCheckResult",
-  "modeLabel", "proxyNote", "keyStateText", "settingsError", "formatElapsed",
+  "settingsLabel", "proxyNote", "keyStateText", "settingsError", "formatElapsed",
   "resolveEngineName", "DEFAULT_ENGINE_NAME", "DEFAULT_MODE",
 ];
 
@@ -733,12 +733,12 @@ test("keyCheckResult always returns a plain message that leaks no status code", 
   }
 });
 
-test("modeLabel names the mode a search would actually use", () => {
-  assert.equal(core.modeLabel("proxied"), "Mode: Proxied");
-  assert.equal(core.modeLabel("direct"), "Mode: Direct");
+test("settingsLabel names the mode a search would actually use", () => {
+  assert.equal(core.settingsLabel("proxied"), "Settings: Proxied");
+  assert.equal(core.settingsLabel("direct"), "Settings: Direct");
   // Not "Direct": a page with no key cannot search, and labelling it Direct would say it can.
-  assert.equal(core.modeLabel("nokey"), "Mode: no key");
-  assert.equal(core.modeLabel(undefined), "Mode: no key");
+  assert.equal(core.settingsLabel("nokey"), "Settings: no key");
+  assert.equal(core.settingsLabel(undefined), "Settings: no key");
 });
 
 test("proxyNote gives a reason only where Proxied cannot be honoured", () => {
@@ -777,7 +777,7 @@ test("keyStateText speaks only for a built-in key", () => {
 
 test("settingsError refuses only the mode that could not search once saved", () => {
   // Direct with no key anywhere is the one combination Save cannot commit: storing it would
-  // produce the saved "Mode: no key" state the form exists to make unreachable.
+  // produce the saved "Settings: no key" state the form exists to make unreachable.
   assert.match(core.settingsError({ mode: "direct", typedKey: "", keptKey: "" }),
     /needs a Keenable API key/);
   assert.match(core.settingsError({ mode: "direct", typedKey: "   ", keptKey: "  " }),

@@ -108,7 +108,7 @@ a:visited { color: var(--link-visited); }
   cursor: default;
 }
 
-/* ---- utility row: About, Settings, the mode line, and the search timing ---- */
+/* ---- utility row: About, the Settings link, and the search timing ---- */
 
 .utility {
   display: flex;
@@ -117,8 +117,11 @@ a:visited { color: var(--link-visited); }
   gap: 22px;
   font-size: 12px;
 }
-.utility__mode,
-.utility__mode:visited { color: var(--ink-muted); }
+/* Chrome, not content: these links sit beside the search box on every view, and the link blue
+   would give them more weight than the results they sit above. Grey in both states, so a visited
+   About does not read differently from an unvisited one. */
+.utility a,
+.utility a:visited { color: var(--ink-muted); }
 .timing {
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -349,8 +352,7 @@ a:visited { color: var(--link-visited); }
     </form>
     <nav class="utility" aria-label="Site">
       <a href="#about">About</a>
-      <a href="#settings">Settings</a>
-      <a class="utility__mode" href="#settings" data-mode-note></a>
+      <a href="#settings" data-settings-link></a>
       <span class="timing" id="timing" hidden></span>
     </nav>
   </div>
@@ -373,8 +375,7 @@ a:visited { color: var(--link-visited); }
     </div>
     <nav class="utility" aria-label="Site">
       <a href="#about">About</a>
-      <a href="#settings">Settings</a>
-      <a class="utility__mode" href="#settings" data-mode-note></a>
+      <a href="#settings" data-settings-link></a>
     </nav>
   </form>
 </section>
@@ -936,14 +937,14 @@ function keyCheckResult(outcome) {
   return { save: true, text: "Key saved, but it could not be checked just now." };
 }
 
-/* The always-visible mode line in the utility row, on every view. It names the mode a search
-   started right now would actually use, which is why "nokey" gets its own wording rather than
-   showing "Direct" for a page that cannot search. It is always a link to Settings, so the line
-   that reports the mode is also the way to change it. */
-function modeLabel(mode) {
-  if (mode === "proxied") return "Mode: Proxied";
-  if (mode === "direct") return "Mode: Direct";
-  return "Mode: no key";
+/* The text of the always-visible Settings link in the utility row, on every view. One link does
+   both jobs: it names the mode a search started right now would actually use — which is why
+   "nokey" gets its own wording rather than showing "Direct" for a page that cannot search — and
+   it is the way to change it. */
+function settingsLabel(mode) {
+  if (mode === "proxied") return "Settings: Proxied";
+  if (mode === "direct") return "Settings: Direct";
+  return "Settings: no key";
 }
 
 /* The one-line reason the Proxied choice cannot be honoured here, or null when it can.
@@ -981,9 +982,10 @@ function keyStateText({ builtIn, engineName } = {}) {
 
    One combination is refusable, and only on Save: Direct chosen with no key anywhere — none
    typed, none staying saved once a staged Clear is applied, none built into the file. Committing
-   it would store a mode that cannot search, which is the "Mode: no key" state the form exists to
-   make unreachable. Everything else commits: Proxied never needs a key, and Direct with the field
-   left blank over an already-saved key is the field's ordinary resting state, not an error.
+   it would store a mode that cannot search, which is the "Settings: no key" state the form
+   exists to make unreachable. Everything else commits: Proxied never needs a key, and Direct
+   with the field left blank over an already-saved key is the field's ordinary resting state, not
+   an error.
 
    `proxyUsable` — proxyStatus() === "possible" — decides whether Proxied is offered as the way
    out. Where it is not, this copy of the page has no searching mode that works without a key, and
@@ -1039,9 +1041,9 @@ const el = {
   notice: document.getElementById("notice"),
   resultList: document.getElementById("results"),
   timing: document.getElementById("timing"),
-  /* One mode line per utility row — home has its own, the masthead carries the other — rendered
-     from the same state by the same function, so they cannot disagree. */
-  modeNotes: document.querySelectorAll("[data-mode-note]"),
+  /* One Settings link per utility row — home has its own, the masthead carries the other —
+     rendered from the same state by the same function, so they cannot disagree. */
+  settingsLinks: document.querySelectorAll("[data-settings-link]"),
   modeChoices: document.getElementById("mode-choices"),
   modeProxied: document.getElementById("mode-proxied"),
   modeDirect: document.getElementById("mode-direct"),
@@ -1097,7 +1099,7 @@ let keyChecking = false;
 
 /* Settings is a form, and these three are its pending state: the radio selection, a Clear that has
    been asked for but not yet applied, and the reason the last Save refused. None of them is read
-   by anything outside the form — the mode line in the utility row, the state line under the
+   by anything outside the form — the Settings link in the utility row, the state line under the
    radios and the search path all read the *saved* preference through modePreference(), so the
    masthead cannot start reporting a mode that has not been committed. Save is the only thing that
    turns any of this into storage. */
@@ -1139,8 +1141,8 @@ const currentProxyStatus = () => proxyStatus({
   proxyKnownBad: proxyKnownBad(),
 });
 
-/* The single source of truth for the mode a search would use right now. The utility-row mode line,
-   the Settings state line and the search path all derive from it, so they cannot disagree.
+/* The single source of truth for the mode a search would use right now. The utility-row Settings
+   link, the Settings state line and the search path all derive from it, so they cannot disagree.
 
    The key is a parameter so a caller that has already resolved it — the search path, which needs
    the key itself for the header — cannot end up deciding the mode from a different answer than
@@ -1273,9 +1275,9 @@ function renderResults() {
   for (const result of state.results) el.resultList.appendChild(resultItem(result));
 }
 
-function renderModeLine() {
-  const label = modeLabel(currentMode());
-  for (const node of el.modeNotes) node.textContent = label;
+function renderSettingsLinks() {
+  const label = settingsLabel(currentMode());
+  for (const node of el.settingsLinks) node.textContent = label;
 }
 
 /* Real measured time or nothing: the number in the reference design is a promise about this
@@ -1355,7 +1357,7 @@ function render() {
 
   renderNotice();
   renderResults();
-  renderModeLine();
+  renderSettingsLinks();
   renderTiming();
   renderModeChoice();
   renderKeyField();

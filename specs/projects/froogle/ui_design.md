@@ -98,7 +98,7 @@ button keep a usable width at 320px.
 
               [ Search                 ] [ Search ]   <- underlined field, dark button
 
-               About  Settings  Mode: Proxied         <- 12px utility row
+               About  Settings: Proxied              <- 12px utility row
 ```
 
 The whole view is a flex column centered on `min-height: 100svh`. The input takes focus on load.
@@ -107,7 +107,7 @@ The whole view is a flex column centered on `min-height: 100svh`. The input take
 
 ```
 Froogle  [ moog model d repair          ]  [ Search ]
-About  Settings  Mode: Proxied  0.19 SECONDS
+About  Settings: Proxied  0.19 SECONDS
 ──────────────────────────────────────────────────────  <- 1px --rule
 
 Servicing a Moog Model D: complete teardown guide       <- 19px --link
@@ -135,7 +135,7 @@ actually do, and what key this browser holds. See **Mode** below.
 |---|---|
 | Wordmark | Text only, single color, weight 500, negative tracking. Two sizes. Never multi-colored |
 | Search form | Real `<form>`, labelled `<input type="search">`, submit button. One in the masthead, one on home |
-| Utility row | About · Settings · mode line, plus the timing on results. One per search form |
+| Utility row | About · the Settings link, plus the timing on results. One per search form. 12px, `--ink-muted` links in every state — chrome, not content |
 | Result item | `<li>` containing title link, URL line, snippet |
 | Notice | One block used for errors, the empty state, and the two no-search states. `role="status"` |
 | Settings form | Settings only. The mode radios, the key field nested in the Direct choice, and one Save |
@@ -186,21 +186,21 @@ unreachable rather than merely reported. Everything that reports the mode — bo
 state line under the radios, and the search path — reads the *saved* preference, so the masthead
 never shows a mode that has not been committed.
 
-### The mode line
+### The Settings link
 
-One line in each utility row, 12px `--ink-muted`, always a link to Settings, so the line that
-reports the mode is also the way to change it. It names the mode a search started *right now*
-would use:
+One link in each utility row, 12px `--ink-muted`, going to Settings. There is no separate mode
+line: the link carries the mode in its own text, so the thing that reports the mode is also the
+way to change it. It names the mode a search started *right now* would use:
 
-| Effective mode | Line |
+| Effective mode | Link |
 |---|---|
-| `proxied` | Mode: Proxied |
-| `direct` | Mode: Direct |
-| `nokey` | Mode: no key |
+| `proxied` | Settings: Proxied |
+| `direct` | Settings: Direct |
+| `nokey` | Settings: no key |
 
 `nokey` gets its own wording rather than reading "Direct", because a page with no key cannot
 search and saying "Direct" would claim it can. Home and the masthead each carry one of these
-lines; they are rendered by one function from one state, so they cannot disagree.
+links; they are rendered by one function from one state, so they cannot disagree.
 
 ### The Settings form
 
