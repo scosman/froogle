@@ -59,11 +59,16 @@ Where a choice cannot be honoured, Froogle says so rather than quietly doing som
 
 ## Deploying it
 
+Froogle runs anywhere: a static host, a VPS, a Raspberry Pi, Cloudflare, Netlify, Vercel. Static
+shapes serve `index.html` alone and get Direct mode; a server also serves `/api/search` and unlocks
+Proxied.
+
 | Shape | Files | Modes available |
 |---|---|---|
 | Downloads folder, `file://` | `index.html` | Direct |
-| Any static host — GitHub Pages, S3, Netlify, nginx | `index.html` | Direct |
-| Cloudflare Workers | `index.html` + `src/` + `wrangler.jsonc` | Direct and proxied |
+| Any static host — GitHub Pages, Netlify, Vercel, S3, nginx | `index.html` | Direct |
+| Any machine with Node — a VPS, a Raspberry Pi | the repo, `node src/serve.mjs` | Direct and Proxied |
+| Cloudflare Workers | the repo (`src/` + `wrangler.jsonc`) | Direct and Proxied |
 
 ### Local file
 
@@ -76,19 +81,22 @@ Copy `index.html` anywhere that serves files. Visitors search in direct mode wit
 `PROXY_PATH` is a **relative** path by design. A copy of `index.html` on another host resolves it against *that* host, so a self-hosted copy structurally cannot reach the original operator's proxy
 — unlike a hardcoded domain, which is a string anyone can edit. If nothing answers there, the first keyless search of the session costs one wasted request and then Froogle remembers, for the rest of that browser session, to go straight to the key prompt instead.
 
-### Cloudflare Workers, with proxied mode
+### A Node server
 
-In the Cloudflare dashboard, **Workers & Pages → Create application → import your repository**.
-There is no build command to set: `wrangler.jsonc` already names the entry point and the assets
-directory, and every push to `main` deploys.
+Clone the repo and run `node src/serve.mjs` (Node 18+). It serves the static files and the proxy on
+`http://localhost:8787` — override with `PORT`. The proxy is same-origin with the page, which is why
+there is no CORS configuration, no preflight, and no origin allowlist anywhere in this project.
+Optionally set `KEENABLE_API_KEY` in the environment so the proxy can fall back to your own key when
+the keyless tier is busy — see [Configuration](#configuration). **If you are exposing this publicly,
+read [Running a public instance](#running-a-public-instance) first.**
 
-`src/worker.mjs` serves `/api/search`, same-origin with the page, which is why there is no CORS configuration, no preflight, and no origin allowlist anywhere in this project. It contains routing and nothing else — one path check, one method check — because Workers has no file-based routing of its own.
+### Cloudflare
 
-Optionally set `KEENABLE_API_KEY` in the Worker's environment so the proxy can fall back to your own
-key when the keyless tier is busy. Add it under **Settings → Variables and Secrets** as a **Secret**,
-not a plaintext variable: `wrangler deploy` replaces plaintext vars with whatever `wrangler.jsonc`
-declares, and would wipe one set in the dashboard. Secrets are left alone. **If you are exposing
-this publicly, read [Running a public instance](#running-a-public-instance) first.**
+Three files make Cloudflare easy: `wrangler.jsonc` names the entry point and the assets directory,
+`src/worker.mjs` routes `/api/search`, and `.assetsignore` keeps the repo's own files out of the
+deployment. Connect the repo and every push to `main` deploys; there is no build command to set.
+If you set `KEENABLE_API_KEY`, make it a **Secret**, not a plaintext variable — `wrangler deploy`
+replaces plaintext vars with whatever `wrangler.jsonc` declares, but leaves secrets alone.
 
 ---
 
@@ -112,7 +120,9 @@ Two of these are stated twice, because a browser page and a server module cannot
   proof the deployment has no proxy and shows the key prompt instead — so `node --test` asserts the
   two agree.
 
-### Proxy — Cloudflare environment variables
+### Proxy — environment variables
+
+Read from the Worker's environment on Cloudflare, or from `process.env` under `node src/serve.mjs`.
 
 | Name | Default | Meaning |
 |---|---|---|
@@ -164,11 +174,11 @@ counters, no cache entries, nothing keyed on the visitor. That is what lets it p
 nothing, and it is what keeps deployment down to "connect the repo". Rate limiting belongs at the
 platform edge, where it works across colos and leaves the logging decision with you.
 
-On Cloudflare: **Security → WAF → Rate limiting rules**, matching on the path `/api/search`. This
-requires a **custom domain**. WAF and rate limiting are zone-level features, and a `*.workers.dev`
-hostname is not in one of your zones — a rule written there will never fire. Attach a custom domain
-to the Worker first, or treat `KEENABLE_API_KEY` as unset until you have. Any
-other host has an equivalent. Pick limits that suit your budget. The rule matches at the edge,
+Every host has an equivalent control; pick limits that suit your budget. On Cloudflare it is
+**Security → WAF → Rate limiting rules**, matching on the path `/api/search` — and it requires a
+**custom domain**: WAF and rate limiting are zone-level features, and a `*.workers.dev` hostname is
+not in one of your zones, so a rule written there will never fire. Attach a custom domain to the
+Worker first, or treat `KEENABLE_API_KEY` as unset until you have. The rule matches at the edge,
 *before* the Worker runs, so an over-limit request never reaches the proxy at all — the
 browser gets the platform's 429 directly, and Froogle shows its "the proxy is busy" message
 with a link to Settings to switch to Direct with a personal key.
@@ -216,10 +226,9 @@ node src/serve.mjs   # the app, on http://localhost:8787
 Run both from the repository root. **Not** `node --test src/` — Node 22 resolves a bare directory
 argument as a module and fails; bare `node --test` discovers `src/*.test.mjs` on its own.
 
-`src/serve.mjs` replaces `wrangler pages dev`, which emulated a product this repo no longer deploys
-to and would therefore pass on routing that fails in production. It bridges `node:http` to
-`Request`/`Response` and hands the result to the same `src/worker.mjs` Cloudflare runs, including a
-filesystem stand-in for the `ASSETS` binding that honours `.assetsignore`. Nothing to install.
+`src/serve.mjs` bridges `node:http` to `Request`/`Response` and hands the result to the same
+`src/worker.mjs` Cloudflare runs, including a filesystem stand-in for the `ASSETS` binding that
+honours `.assetsignore`. Nothing to install.
 
 * `src/core.test.mjs` extracts the pure core of `index.html` — the region between the
   `FROOGLE:CORE:BEGIN` / `:END` markers — and evaluates it in a sandbox that holds nothing but the
